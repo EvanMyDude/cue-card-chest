@@ -33,9 +33,12 @@ export const SortablePromptCard = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <div {...listeners} className="absolute top-2 left-2 p-2 cursor-grab active:cursor-grabbing opacity-0 hover:opacity-100 transition-opacity z-10">
-        <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/50">
+    <div ref={setNodeRef} style={style} {...attributes} className="relative">
+      <div 
+        {...listeners} 
+        className="absolute top-2 left-2 p-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-10"
+      >
+        <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/80 hover:bg-muted">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-muted-foreground">
             <circle cx="3" cy="3" r="1" fill="currentColor"/>
             <circle cx="9" cy="3" r="1" fill="currentColor"/>
@@ -46,12 +49,14 @@ export const SortablePromptCard = ({
           </svg>
         </div>
       </div>
-      <PromptCard
-        prompt={prompt}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onTogglePin={onTogglePin}
-      />
+      <div className="group">
+        <PromptCard
+          prompt={prompt}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onTogglePin={onTogglePin}
+        />
+      </div>
     </div>
   );
 };
