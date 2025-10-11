@@ -91,6 +91,12 @@ const Index = () => {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
+    // Only allow reordering in manual mode
+    if (sortMode !== 'manual') {
+      toast.info('Reordering is only available in Manual Order mode');
+      return;
+    }
+
     if (over && active.id !== over.id) {
       const oldIndex = prompts.findIndex((p) => p.id === active.id);
       const newIndex = prompts.findIndex((p) => p.id === over.id);
@@ -102,6 +108,12 @@ const Index = () => {
 
       setPrompts(reordered);
       toast.success('Order updated');
+    }
+  };
+
+  const handleDragStart = () => {
+    if (sortMode !== 'manual') {
+      toast.info('Switch to Manual Order mode to reorder prompts');
     }
   };
 
@@ -204,9 +216,10 @@ const Index = () => {
         {/* Prompts Grid */}
         {filteredPrompts.length > 0 ? (
           <DndContext
-            sensors={sensors}
+            sensors={sortMode === 'manual' ? sensors : []}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
+            onDragStart={handleDragStart}
           >
             <SortableContext
               items={filteredPrompts.map((p) => p.id)}
