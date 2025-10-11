@@ -206,19 +206,19 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
                 }}
                 onKeyDown={handleAddTag}
                 onFocus={() => setShowSuggestions(tagInput.trim().length > 0)}
-                className="bg-secondary border-border"
+                className="bg-secondary border-border text-foreground"
               />
             </PopoverTrigger>
-            <PopoverContent className="w-full p-0" align="start" side="bottom">
-              <Command>
-                <CommandEmpty>No matching tags</CommandEmpty>
+            <PopoverContent className="w-full p-0 bg-popover border-border z-50" align="start" side="bottom">
+              <Command className="bg-popover">
+                <CommandEmpty className="text-muted-foreground">No matching tags</CommandEmpty>
                 <CommandGroup>
                   {suggestedTags.map((tag) => (
                     <CommandItem
                       key={tag}
                       value={tag}
                       onSelect={() => addTag(tag)}
-                      className="cursor-pointer"
+                      className="cursor-pointer hover:bg-accent"
                     >
                       {tag}
                     </CommandItem>
