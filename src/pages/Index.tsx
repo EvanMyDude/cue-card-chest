@@ -4,7 +4,8 @@ import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { SearchBar } from '@/components/SearchBar';
 import { ExportButton } from '@/components/ExportButton';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { BookOpen, Sparkles, GripVertical } from 'lucide-react';
+import { useSound } from '@/hooks/useSound';
+import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
@@ -28,7 +29,8 @@ const Index = () => {
   const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
-  const [sortMode, setSortMode] = useState<'manual' | 'date'>('date');
+  const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
+  const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -38,6 +40,7 @@ const Index = () => {
   );
 
   const handleSavePrompt = (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
+    playSuccess();
     if (editingPrompt) {
       setPrompts(
         prompts.map((p) =>
@@ -62,11 +65,13 @@ const Index = () => {
   };
 
   const handleDeletePrompt = (id: string) => {
+    playClick();
     setPrompts(prompts.filter((p) => p.id !== id));
     toast.success('Prompt deleted');
   };
 
   const handleDuplicatePrompt = (prompt: Prompt) => {
+    playSuccess();
     const duplicated: Prompt = {
       ...prompt,
       id: crypto.randomUUID(),
@@ -81,6 +86,7 @@ const Index = () => {
   };
 
   const handleTogglePin = (id: string) => {
+    playClick();
     setPrompts(
       prompts.map((p) =>
         p.id === id ? { ...p, isPinned: !p.isPinned } : p
@@ -98,6 +104,7 @@ const Index = () => {
     }
 
     if (over && active.id !== over.id) {
+      playClick();
       const oldIndex = prompts.findIndex((p) => p.id === active.id);
       const newIndex = prompts.findIndex((p) => p.id === over.id);
 
@@ -165,7 +172,10 @@ const Index = () => {
               <Button
                 variant={sortMode === 'manual' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSortMode('manual')}
+                onClick={() => {
+                  playClick();
+                  setSortMode('manual');
+                }}
                 className="gap-2"
               >
                 <GripVertical className="h-4 w-4" />
@@ -174,11 +184,26 @@ const Index = () => {
               <Button
                 variant={sortMode === 'date' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setSortMode('date')}
+                onClick={() => {
+                  playClick();
+                  setSortMode('date');
+                }}
               >
                 Sort by Date
               </Button>
-              <ExportButton prompts={prompts} />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  playClick();
+                  setSoundEnabled(!soundEnabled);
+                  toast.success(soundEnabled ? 'Sounds disabled' : 'Sounds enabled');
+                }}
+                title={soundEnabled ? 'Disable sounds' : 'Enable sounds'}
+              >
+                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              </Button>
+              <ExportButton prompts={prompts} onExport={playSuccess} />
             </div>
           </div>
           <p className="text-muted-foreground">
@@ -192,6 +217,8 @@ const Index = () => {
             onSave={handleSavePrompt}
             editingPrompt={editingPrompt}
             onCancelEdit={() => setEditingPrompt(null)}
+            onGenerateTitle={playSuccess}
+            onCancel={playClick}
           />
         </div>
 

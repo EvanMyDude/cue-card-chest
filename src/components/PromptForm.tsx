@@ -13,9 +13,11 @@ interface PromptFormProps {
   onSave: (prompt: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => void;
   editingPrompt?: Prompt | null;
   onCancelEdit?: () => void;
+  onGenerateTitle?: () => void;
+  onCancel?: () => void;
 }
 
-export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormProps) {
+export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitle, onCancel }: PromptFormProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -36,6 +38,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
       return;
     }
 
+    onGenerateTitle?.();
     setIsGeneratingTitle(true);
     try {
       const { data, error } = await supabase.functions.invoke('generate-title', {
@@ -116,6 +119,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
   };
 
   const handleCancel = () => {
+    onCancel?.();
     setTitle('');
     setContent('');
     setTags([]);

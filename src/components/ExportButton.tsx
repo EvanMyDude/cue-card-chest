@@ -6,9 +6,10 @@ import { toast } from 'sonner';
 
 interface ExportButtonProps {
   prompts: Prompt[];
+  onExport?: () => void;
 }
 
-export const ExportButton = ({ prompts }: ExportButtonProps) => {
+export const ExportButton = ({ prompts, onExport }: ExportButtonProps) => {
   const handleExport = () => {
     if (prompts.length === 0) {
       toast.error('No prompts to export');
@@ -16,6 +17,7 @@ export const ExportButton = ({ prompts }: ExportButtonProps) => {
     }
     
     try {
+      onExport?.();
       exportPromptsToPDF(prompts);
       toast.success('PDF exported successfully!');
     } catch (error) {
