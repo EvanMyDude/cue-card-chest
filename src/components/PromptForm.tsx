@@ -4,7 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { X } from 'lucide-react';
+import { X, Sparkles } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
 
 interface PromptFormProps {
@@ -18,6 +20,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   useEffect(() => {
     if (editingPrompt) {
@@ -27,16 +30,68 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
     }
   }, [editingPrompt]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const generateSmartTitle = async () => {
+    if (!content.trim()) {
+      toast.error('Please enter some content first');
+      return;
+    }
+
+    setIsGeneratingTitle(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-title', {
+        body: { content: content.trim() }
+      });
+
+      if (error) throw error;
+
+      if (data?.title) {
+        setTitle(data.title);
+        toast.success('Title generated!');
+      }
+    } catch (error) {
+      console.error('Error generating title:', error);
+      toast.error('Failed to generate title');
+    } finally {
+      setIsGeneratingTitle(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const autoTitle = title.trim() || content.split('\n')[0].slice(0, 50) || 'Untitled Prompt';
+    let finalTitle = title.trim();
+    
+    // If no title provided and content exists, generate smart title
+    if (!finalTitle && content.trim()) {
+      setIsGeneratingTitle(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('generate-title', {
+          body: { content: content.trim() }
+        });
+
+        if (!error && data?.title) {
+          finalTitle = data.title;
+        } else {
+          finalTitle = content.split('\n')[0].slice(0, 50) || 'Untitled Prompt';
+        }
+      } catch (error) {
+        console.error('Error generating title:', error);
+        finalTitle = content.split('\n')[0].slice(0, 50) || 'Untitled Prompt';
+      } finally {
+        setIsGeneratingTitle(false);
+      }
+    }
+    
+    if (!finalTitle) {
+      finalTitle = 'Untitled Prompt';
+    }
     
     onSave({
-      title: autoTitle,
+      title: finalTitle,
       content: content.trim(),
       tags,
       isPinned: editingPrompt?.isPinned || false,
+      order: editingPrompt?.order || Date.now(),
     });
 
     setTitle('');
@@ -72,12 +127,24 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
     <Card className="p-6 border-border bg-card">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <Input
-            placeholder="Prompt title (optional - auto-fills from content)"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="bg-secondary border-border"
-          />
+          <div className="flex gap-2">
+            <Input
+              placeholder="Prompt title (optional - AI will generate if empty)"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="bg-secondary border-border flex-1"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={generateSmartTitle}
+              disabled={!content.trim() || isGeneratingTitle}
+              className="gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              {isGeneratingTitle ? 'Generating...' : 'AI Title'}
+            </Button>
+          </div>
         </div>
 
         <div>
@@ -119,8 +186,8 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit }: PromptFormPr
         </div>
 
         <div className="flex gap-2">
-          <Button type="submit" className="flex-1">
-            {editingPrompt ? 'Update Prompt' : 'Save Prompt'}
+          <Button type="submit" className="flex-1" disabled={isGeneratingTitle}>
+            {isGeneratingTitle ? 'Generating Title...' : editingPrompt ? 'Update Prompt' : 'Save Prompt'}
           </Button>
           {editingPrompt && (
             <Button type="button" variant="outline" onClick={handleCancel}>

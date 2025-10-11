@@ -1,16 +1,41 @@
 import { useState, useMemo } from 'react';
 import { PromptForm } from '@/components/PromptForm';
-import { PromptCard } from '@/components/PromptCard';
+import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { SearchBar } from '@/components/SearchBar';
+import { ExportButton } from '@/components/ExportButton';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
-import { BookOpen, Sparkles } from 'lucide-react';
+import { BookOpen, Sparkles, GripVertical } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 
 const Index = () => {
   const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [sortMode, setSortMode] = useState<'manual' | 'date'>('date');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleSavePrompt = (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (editingPrompt) {
@@ -27,6 +52,7 @@ const Index = () => {
       const newPrompt: Prompt = {
         ...promptData,
         id: crypto.randomUUID(),
+        order: Date.now(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -45,6 +71,7 @@ const Index = () => {
       ...prompt,
       id: crypto.randomUUID(),
       title: `${prompt.title} (Copy)`,
+      order: Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       isPinned: false,
@@ -61,36 +88,86 @@ const Index = () => {
     );
   };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = prompts.findIndex((p) => p.id === active.id);
+      const newIndex = prompts.findIndex((p) => p.id === over.id);
+
+      const reordered = arrayMove(prompts, oldIndex, newIndex).map((p, idx) => ({
+        ...p,
+        order: idx,
+      }));
+
+      setPrompts(reordered);
+      toast.success('Order updated');
+    }
+  };
+
   const filteredPrompts = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return prompts
-      .filter((prompt) => {
-        if (!query) return true;
-        return (
-          prompt.title.toLowerCase().includes(query) ||
-          prompt.content.toLowerCase().includes(query) ||
-          prompt.tags.some((tag) => tag.toLowerCase().includes(query))
-        );
-      })
-      .sort((a, b) => {
+    let filtered = prompts.filter((prompt) => {
+      if (!query) return true;
+      return (
+        prompt.title.toLowerCase().includes(query) ||
+        prompt.content.toLowerCase().includes(query) ||
+        prompt.tags.some((tag) => tag.toLowerCase().includes(query))
+      );
+    });
+
+    // Sort based on mode
+    if (sortMode === 'manual') {
+      filtered = filtered.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        return (a.order || 0) - (b.order || 0);
+      });
+    } else {
+      filtered = filtered.sort((a, b) => {
         if (a.isPinned !== b.isPinned) {
           return a.isPinned ? -1 : 1;
         }
         return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
       });
-  }, [prompts, searchQuery]);
+    }
+
+    return filtered;
+  }, [prompts, searchQuery, sortMode]);
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <BookOpen className="h-6 w-6 text-primary" />
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <BookOpen className="h-6 w-6 text-primary" />
+              </div>
+              <h1 className="text-4xl font-bold text-foreground">Prompt Library</h1>
+              <Sparkles className="h-5 w-5 text-accent" />
             </div>
-            <h1 className="text-4xl font-bold text-foreground">Prompt Library</h1>
-            <Sparkles className="h-5 w-5 text-accent" />
+            <div className="flex gap-2">
+              <Button
+                variant={sortMode === 'manual' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortMode('manual')}
+                className="gap-2"
+              >
+                <GripVertical className="h-4 w-4" />
+                Manual Order
+              </Button>
+              <Button
+                variant={sortMode === 'date' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setSortMode('date')}
+              >
+                Sort by Date
+              </Button>
+              <ExportButton prompts={prompts} />
+            </div>
           </div>
           <p className="text-muted-foreground">
             Save, organize, and reuse your AI prompts. All data persists locally.
@@ -126,18 +203,29 @@ const Index = () => {
 
         {/* Prompts Grid */}
         {filteredPrompts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPrompts.map((prompt) => (
-              <PromptCard
-                key={prompt.id}
-                prompt={prompt}
-                onEdit={setEditingPrompt}
-                onDelete={handleDeletePrompt}
-                onDuplicate={handleDuplicatePrompt}
-                onTogglePin={handleTogglePin}
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filteredPrompts.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredPrompts.map((prompt) => (
+                  <SortablePromptCard
+                    key={prompt.id}
+                    prompt={prompt}
+                    onEdit={setEditingPrompt}
+                    onDelete={handleDeletePrompt}
+                    onDuplicate={handleDuplicatePrompt}
+                    onTogglePin={handleTogglePin}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         ) : (
           <div className="text-center py-16">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">

@@ -4,6 +4,7 @@ export interface Prompt {
   content: string;
   tags: string[];
   isPinned: boolean;
+  order: number;
   createdAt: string;
   updatedAt: string;
 }
