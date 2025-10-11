@@ -70,20 +70,6 @@ const Index = () => {
     toast.success('Prompt deleted');
   };
 
-  const handleDuplicatePrompt = (prompt: Prompt) => {
-    playSuccess();
-    const duplicated: Prompt = {
-      ...prompt,
-      id: crypto.randomUUID(),
-      title: `${prompt.title} (Copy)`,
-      order: Date.now(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isPinned: false,
-    };
-    setPrompts([duplicated, ...prompts]);
-    toast.success('Prompt duplicated!');
-  };
 
   const handleTogglePin = (id: string) => {
     playClick();
@@ -259,7 +245,6 @@ const Index = () => {
                     prompt={prompt}
                     onEdit={setEditingPrompt}
                     onDelete={handleDeletePrompt}
-                    onDuplicate={handleDuplicatePrompt}
                     onTogglePin={handleTogglePin}
                   />
                 ))}

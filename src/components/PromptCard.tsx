@@ -9,11 +9,10 @@ interface PromptCardProps {
   prompt: Prompt;
   onEdit: (prompt: Prompt) => void;
   onDelete: (id: string) => void;
-  onDuplicate: (prompt: Prompt) => void;
   onTogglePin: (id: string) => void;
 }
 
-export function PromptCard({ prompt, onEdit, onDelete, onDuplicate, onTogglePin }: PromptCardProps) {
+export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCardProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(prompt.content);
@@ -91,13 +90,6 @@ export function PromptCard({ prompt, onEdit, onDelete, onDuplicate, onTogglePin 
           onClick={() => onEdit(prompt)}
         >
           <Edit className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onDuplicate(prompt)}
-        >
-          <Copy className="h-4 w-4" />
         </Button>
         <Button
           variant="outline"
