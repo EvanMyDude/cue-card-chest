@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { X, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -196,7 +196,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
 
         <div>
           <Popover open={showSuggestions && suggestedTags.length > 0} onOpenChange={setShowSuggestions}>
-            <PopoverTrigger asChild>
+            <PopoverAnchor asChild>
               <Input
                 placeholder="Add tags (press Enter)"
                 value={tagInput}
@@ -208,7 +208,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
                 onFocus={() => setShowSuggestions(tagInput.trim().length > 0)}
                 className="bg-secondary border-border text-foreground"
               />
-            </PopoverTrigger>
+            </PopoverAnchor>
             <PopoverContent className="w-full p-0 bg-popover border-border z-50" align="start" side="bottom">
               <Command className="bg-popover">
                 <CommandEmpty className="text-muted-foreground">No matching tags</CommandEmpty>
