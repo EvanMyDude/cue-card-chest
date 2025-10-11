@@ -8,6 +8,7 @@ interface SortablePromptCardProps {
   onEdit: (prompt: Prompt) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  isDragEnabled?: boolean;
 }
 
 export const SortablePromptCard = ({
@@ -15,6 +16,7 @@ export const SortablePromptCard = ({
   onEdit,
   onDelete,
   onTogglePin,
+  isDragEnabled = true,
 }: SortablePromptCardProps) => {
   const {
     attributes,
@@ -23,7 +25,7 @@ export const SortablePromptCard = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: prompt.id });
+  } = useSortable({ id: prompt.id, disabled: !isDragEnabled });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -33,10 +35,13 @@ export const SortablePromptCard = ({
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} className="relative">
+    <div ref={setNodeRef} style={style} {...attributes} className="relative group">
       <div 
-        {...listeners} 
-        className="absolute top-2 left-2 p-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-10"
+        {...listeners}
+        role="button"
+        tabIndex={0}
+        aria-label="Drag to reorder"
+        className="absolute top-2 left-2 p-2 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity z-10 pointer-events-auto touch-none select-none"
       >
         <div className="w-6 h-6 flex items-center justify-center rounded bg-muted/80 hover:bg-muted">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-muted-foreground">

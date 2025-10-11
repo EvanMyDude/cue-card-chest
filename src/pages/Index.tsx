@@ -273,6 +273,7 @@ const Index = () => {
                     onEdit={setEditingPrompt}
                     onDelete={handleDeletePrompt}
                     onTogglePin={handleTogglePin}
+                    isDragEnabled={sortMode === 'manual'}
                   />
                 ))}
               </div>
