@@ -89,19 +89,37 @@ const Index = () => {
       return;
     }
 
-    if (over && active.id !== over.id) {
-      playClick();
-      const oldIndex = prompts.findIndex((p) => p.id === active.id);
-      const newIndex = prompts.findIndex((p) => p.id === over.id);
-
-      const reordered = arrayMove(prompts, oldIndex, newIndex).map((p, idx) => ({
-        ...p,
-        order: idx,
-      }));
-
-      setPrompts(reordered);
-      toast.success('Order updated');
+    // Avoid confusing partial updates while searching
+    if (searchQuery) {
+      toast.info('Clear the search to reorder prompts');
+      return;
     }
+
+    if (!over || active.id === over.id) return;
+
+    playClick();
+
+    const oldIndex = filteredPrompts.findIndex((p) => p.id === active.id);
+    const newIndex = filteredPrompts.findIndex((p) => p.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Keep reordering within the same pin group to avoid confusing jumps
+    const activePinned = filteredPrompts[oldIndex].isPinned;
+    const overPinned = filteredPrompts[newIndex].isPinned;
+    if (activePinned !== overPinned) {
+      toast.info('Reorder within pinned or unpinned groups');
+      return;
+    }
+
+    const reorderedVisible = arrayMove(filteredPrompts, oldIndex, newIndex);
+    const reordered = reorderedVisible.map((p, idx) => ({
+      ...p,
+      order: idx,
+    }));
+
+    setPrompts(reordered);
+    toast.success('Order updated');
   };
 
   const handleDragStart = () => {
