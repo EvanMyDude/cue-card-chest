@@ -187,7 +187,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
             onChange={(e) => setContent(e.target.value)}
             required
             rows={8}
-            className="resize-none bg-secondary border-border"
+            className="resize-y bg-secondary border-border min-h-[200px]"
           />
           <p className="text-sm text-muted-foreground mt-2">
             {content.length} characters

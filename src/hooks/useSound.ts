@@ -53,7 +53,7 @@ const createSuccessSound = () => {
 };
 
 export const useSound = () => {
-  const [soundEnabled, setSoundEnabled] = useLocalStorage('sound-enabled', true);
+  const [soundEnabled, setSoundEnabled] = useLocalStorage('sound-enabled', false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const playClick = useCallback(() => {
