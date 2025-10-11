@@ -110,6 +110,14 @@ const Index = () => {
     }
   };
 
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    prompts.forEach(prompt => {
+      prompt.tags.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }, [prompts]);
+
   const filteredPrompts = useMemo(() => {
     const query = searchQuery.toLowerCase();
     let filtered = prompts.filter((prompt) => {
@@ -205,6 +213,7 @@ const Index = () => {
             onCancelEdit={() => setEditingPrompt(null)}
             onGenerateTitle={playSuccess}
             onCancel={playClick}
+            existingTags={allTags}
           />
         </div>
 

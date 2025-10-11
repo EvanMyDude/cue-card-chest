@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { X, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -15,14 +17,16 @@ interface PromptFormProps {
   onCancelEdit?: () => void;
   onGenerateTitle?: () => void;
   onCancel?: () => void;
+  existingTags?: string[];
 }
 
-export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitle, onCancel }: PromptFormProps) {
+export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitle, onCancel, existingTags = [] }: PromptFormProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     if (editingPrompt) {
@@ -103,14 +107,39 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     setTagInput('');
   };
 
+  const suggestedTags = useMemo(() => {
+    if (!tagInput.trim()) return [];
+    
+    const input = tagInput.toLowerCase();
+    const availableTags = existingTags.filter(tag => !tags.includes(tag));
+    
+    return availableTags
+      .filter(tag => tag.toLowerCase().includes(input))
+      .sort((a, b) => {
+        const aStarts = a.toLowerCase().startsWith(input);
+        const bStarts = b.toLowerCase().startsWith(input);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        return a.localeCompare(b);
+      })
+      .slice(0, 10);
+  }, [tagInput, existingTags, tags]);
+
+  const addTag = (newTag: string) => {
+    const tag = newTag.trim().toLowerCase();
+    if (tag && !tags.includes(tag)) {
+      setTags([...tags, tag]);
+    }
+    setTagInput('');
+    setShowSuggestions(false);
+  };
+
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      const newTag = tagInput.trim().toLowerCase();
-      if (!tags.includes(newTag)) {
-        setTags([...tags, newTag]);
-      }
-      setTagInput('');
+      addTag(tagInput);
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
     }
   };
 
@@ -166,13 +195,38 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
         </div>
 
         <div>
-          <Input
-            placeholder="Add tags (press Enter)"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={handleAddTag}
-            className="bg-secondary border-border"
-          />
+          <Popover open={showSuggestions && suggestedTags.length > 0} onOpenChange={setShowSuggestions}>
+            <PopoverTrigger asChild>
+              <Input
+                placeholder="Add tags (press Enter)"
+                value={tagInput}
+                onChange={(e) => {
+                  setTagInput(e.target.value);
+                  setShowSuggestions(e.target.value.trim().length > 0);
+                }}
+                onKeyDown={handleAddTag}
+                onFocus={() => setShowSuggestions(tagInput.trim().length > 0)}
+                className="bg-secondary border-border"
+              />
+            </PopoverTrigger>
+            <PopoverContent className="w-full p-0" align="start" side="bottom">
+              <Command>
+                <CommandEmpty>No matching tags</CommandEmpty>
+                <CommandGroup>
+                  {suggestedTags.map((tag) => (
+                    <CommandItem
+                      key={tag}
+                      value={tag}
+                      onSelect={() => addTag(tag)}
+                      className="cursor-pointer"
+                    >
+                      {tag}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </Command>
+            </PopoverContent>
+          </Popover>
           <div className="flex flex-wrap gap-2 mt-3">
             {tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="gap-1">

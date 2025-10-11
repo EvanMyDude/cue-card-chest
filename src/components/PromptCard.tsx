@@ -66,7 +66,7 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
 
       {prompt.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-4">
-          {prompt.tags.map((tag) => (
+          {[...prompt.tags].sort((a, b) => a.localeCompare(b)).map((tag) => (
             <Badge key={tag} variant="outline" className="text-xs">
               {tag}
             </Badge>
