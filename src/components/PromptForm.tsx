@@ -4,8 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Popover, PopoverContent, PopoverAnchor } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { X, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -26,7 +24,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   useEffect(() => {
     if (editingPrompt) {
@@ -131,15 +129,28 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
       setTags([...tags, tag]);
     }
     setTagInput('');
-    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
   };
 
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      addTag(tagInput);
+      if (selectedSuggestionIndex >= 0 && suggestedTags[selectedSuggestionIndex]) {
+        addTag(suggestedTags[selectedSuggestionIndex]);
+      } else {
+        addTag(tagInput);
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => 
+        prev < suggestedTags.length - 1 ? prev + 1 : prev
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
     } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
+      setTagInput('');
+      setSelectedSuggestionIndex(-1);
     }
   };
 
@@ -153,8 +164,14 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     setContent('');
     setTags([]);
     setTagInput('');
+    setSelectedSuggestionIndex(-1);
     onCancelEdit?.();
   };
+
+  // Reset suggestion index when suggestions change
+  useEffect(() => {
+    setSelectedSuggestionIndex(-1);
+  }, [suggestedTags.length]);
 
   return (
     <Card className="p-6 border-border bg-card">
@@ -194,39 +211,35 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
           </p>
         </div>
 
-        <div>
-          <Popover open={showSuggestions && suggestedTags.length > 0} onOpenChange={setShowSuggestions}>
-            <PopoverAnchor asChild>
-              <Input
-                placeholder="Add tags (press Enter)"
-                value={tagInput}
-                onChange={(e) => {
-                  setTagInput(e.target.value);
-                  setShowSuggestions(e.target.value.trim().length > 0);
-                }}
-                onKeyDown={handleAddTag}
-                onFocus={() => setShowSuggestions(tagInput.trim().length > 0)}
-                className="bg-secondary border-border text-foreground"
-              />
-            </PopoverAnchor>
-            <PopoverContent className="w-full p-0 bg-popover border-border z-50" align="start" side="bottom">
-              <Command className="bg-popover">
-                <CommandEmpty className="text-muted-foreground">No matching tags</CommandEmpty>
-                <CommandGroup>
-                  {suggestedTags.map((tag) => (
-                    <CommandItem
-                      key={tag}
-                      value={tag}
-                      onSelect={() => addTag(tag)}
-                      className="cursor-pointer hover:bg-accent"
-                    >
-                      {tag}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </Command>
-            </PopoverContent>
-          </Popover>
+        <div className="relative">
+          <Input
+            placeholder="Add tags (press Enter)"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={handleAddTag}
+            className="bg-secondary border-border text-foreground"
+          />
+          {tagInput.trim() && suggestedTags.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+              {suggestedTags.map((tag, index) => (
+                <div
+                  key={tag}
+                  className={`px-3 py-2 cursor-pointer text-sm transition-colors ${
+                    index === selectedSuggestionIndex 
+                      ? 'bg-accent text-accent-foreground' 
+                      : 'text-foreground hover:bg-accent/50'
+                  }`}
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // Prevent input blur
+                    addTag(tag);
+                  }}
+                  onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                >
+                  {tag}
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mt-3">
             {tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="gap-1">

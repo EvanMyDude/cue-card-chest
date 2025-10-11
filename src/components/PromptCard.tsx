@@ -10,9 +10,10 @@ interface PromptCardProps {
   onEdit: (prompt: Prompt) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onPreview?: (prompt: Prompt) => void;
 }
 
-export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCardProps) {
+export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }: PromptCardProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(prompt.content);
@@ -35,7 +36,10 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
     <Card className={`p-5 transition-all hover:shadow-lg border-border bg-card ${
       prompt.isPinned ? 'ring-2 ring-accent/50' : ''
     }`}>
-      <div className="flex items-start justify-between mb-3">
+      <div 
+        className="flex items-start justify-between mb-3 cursor-pointer" 
+        onClick={() => onPreview?.(prompt)}
+      >
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold mb-1 truncate text-foreground">
             {prompt.title}
@@ -47,7 +51,10 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => onTogglePin(prompt.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin(prompt.id);
+          }}
           className="ml-2 shrink-0"
         >
           {prompt.isPinned ? (
@@ -58,7 +65,10 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
         </Button>
       </div>
 
-      <div className="mb-3">
+      <div 
+        className="mb-3 cursor-pointer" 
+        onClick={() => onPreview?.(prompt)}
+      >
         <p className="text-sm text-foreground line-clamp-3 whitespace-pre-wrap">
           {prompt.content}
         </p>
@@ -78,7 +88,10 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
         <Button
           variant="secondary"
           size="sm"
-          onClick={handleCopy}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCopy();
+          }}
           className="flex-1"
         >
           <Copy className="h-4 w-4 mr-2" />
@@ -87,14 +100,20 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin }: PromptCard
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onEdit(prompt)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(prompt);
+          }}
         >
           <Edit className="h-4 w-4" />
         </Button>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onDelete(prompt.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(prompt.id);
+          }}
           className="hover:bg-destructive hover:text-destructive-foreground"
         >
           <Trash2 className="h-4 w-4" />

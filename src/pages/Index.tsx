@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
+import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
 import { ExportButton } from '@/components/ExportButton';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -29,8 +30,10 @@ const Index = () => {
   const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null);
   const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -79,6 +82,20 @@ const Index = () => {
       )
     );
   };
+
+  const handleEdit = (prompt: Prompt) => {
+    setEditingPrompt(prompt);
+    // Scroll form into view smoothly
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  useEffect(() => {
+    if (editingPrompt) {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [editingPrompt]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -224,7 +241,7 @@ const Index = () => {
         </div>
 
         {/* Form */}
-        <div className="mb-8">
+        <div ref={formRef} className="mb-8">
           <PromptForm
             onSave={handleSavePrompt}
             editingPrompt={editingPrompt}
@@ -270,9 +287,10 @@ const Index = () => {
                   <SortablePromptCard
                     key={prompt.id}
                     prompt={prompt}
-                    onEdit={setEditingPrompt}
+                    onEdit={handleEdit}
                     onDelete={handleDeletePrompt}
                     onTogglePin={handleTogglePin}
+                    onPreview={setPreviewPrompt}
                     isDragEnabled={sortMode === 'manual'}
                   />
                 ))}
@@ -295,6 +313,14 @@ const Index = () => {
           </div>
         )}
       </div>
+
+      <PromptPreviewDialog
+        prompt={previewPrompt}
+        open={!!previewPrompt}
+        onOpenChange={(open) => !open && setPreviewPrompt(null)}
+        onEdit={handleEdit}
+        onTogglePin={handleTogglePin}
+      />
     </div>
   );
 };
