@@ -20,6 +20,12 @@ export const SortablePromptCard = ({
   onPreview,
   isDragEnabled = true,
 }: SortablePromptCardProps) => {
+  // Defensive check for incomplete prompt data
+  if (!prompt || !prompt.id) {
+    console.warn('[SortablePromptCard] Invalid prompt:', prompt);
+    return null;
+  }
+
   const {
     attributes,
     listeners,
@@ -27,7 +33,10 @@ export const SortablePromptCard = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: prompt.id, disabled: !isDragEnabled });
+  } = useSortable({ 
+    id: prompt.id, 
+    disabled: !isDragEnabled 
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),

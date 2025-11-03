@@ -73,6 +73,7 @@ export function useMigration(): UseMigrationResult {
 
   /**
    * Check if migration is needed
+   * Now also checks if device needs registration (even without backup)
    */
   const checkMigrationNeeded = useCallback(async (): Promise<boolean> => {
     if (!storage.isReady || !user) return false;
@@ -80,20 +81,32 @@ export function useMigration(): UseMigrationResult {
     setState(prev => ({ ...prev, phase: 'checking' }));
 
     try {
-      const isFirstTime = await isFirstTimeUser();
+      // Check if device is already registered
+      const deviceInfo = await storage.getDeviceInfo();
       
-      if (isFirstTime) {
-        const backup = await exportLocalStorageBackup();
+      if (!deviceInfo?.device_id) {
+        // Device not registered - check if there's a backup to import
+        const isFirstTime = await isFirstTimeUser();
         
-        if (backup && backup.prompts.length > 0) {
-          setState(prev => ({
-            ...prev,
-            phase: 'backup-ready',
-            needsBackup: true,
-            backup,
-          }));
-          return true;
+        if (isFirstTime) {
+          const backup = await exportLocalStorageBackup();
+          
+          if (backup && backup.prompts.length > 0) {
+            // Has backup to import
+            setState(prev => ({
+              ...prev,
+              phase: 'backup-ready',
+              needsBackup: true,
+              backup,
+            }));
+            return true;
+          }
         }
+        
+        // No backup, but still needs device registration
+        // This will be handled by useDeviceRegistration auto-registration
+        setState(prev => ({ ...prev, phase: 'idle', needsBackup: false }));
+        return false;
       }
 
       setState(prev => ({ ...prev, phase: 'idle', needsBackup: false }));

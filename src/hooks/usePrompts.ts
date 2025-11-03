@@ -1,11 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useOfflineStorage } from './useOfflineStorage';
 import { useSyncQueue } from './useSyncQueue';
+import { useDeviceRegistration } from './useDeviceRegistration';
 import { useAuth } from './useAuth';
 import { computeChecksum } from '@/lib/checksum';
 import { onSyncEvent, type SyncStatus, type ConflictRecord } from '@/lib/syncEngine';
 import type { Prompt } from '@/types/prompt';
 import type { PromptRecord } from '@/lib/db';
+
+const DEV = import.meta.env.DEV;
 
 export interface UsePromptsResult {
   prompts: Prompt[];
@@ -38,28 +41,15 @@ export interface UsePromptsResult {
 export function usePrompts(): UsePromptsResult {
   const { user } = useAuth();
   const storage = useOfflineStorage();
+  const deviceReg = useDeviceRegistration();
   
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [conflicts, setConflicts] = useState<ConflictRecord[]>([]);
-  const [deviceId, setDeviceId] = useState<string>();
 
-  // Initialize sync queue
-  const syncQueue = useSyncQueue(deviceId, user?.id);
-
-  /**
-   * Load device ID from IndexedDB
-   */
-  useEffect(() => {
-    if (!storage.isReady) return;
-
-    storage.getDeviceInfo().then(info => {
-      if (info?.device_id) {
-        setDeviceId(info.device_id);
-      }
-    });
-  }, [storage]);
+  // Initialize sync queue with device ID from useDeviceRegistration
+  const syncQueue = useSyncQueue(deviceReg.deviceId || undefined, user?.id);
 
   /**
    * Load prompts from IndexedDB
@@ -71,6 +61,7 @@ export function usePrompts(): UsePromptsResult {
 
     try {
       const loadedPrompts = await storage.listPrompts(user.id);
+      if (DEV) console.info('[usePrompts] Loaded prompts from IndexedDB:', loadedPrompts.length);
       setPrompts(loadedPrompts);
     } catch (err) {
       console.error('[usePrompts] Failed to load prompts:', err);
@@ -105,6 +96,27 @@ export function usePrompts(): UsePromptsResult {
   }, []);
 
   /**
+   * Ensure device is registered before operations
+   */
+  const ensureDeviceRegistered = useCallback(async (): Promise<string | null> => {
+    if (deviceReg.deviceId) {
+      return deviceReg.deviceId;
+    }
+
+    if (deviceReg.isRegistering) {
+      // Wait for registration to complete
+      if (DEV) console.info('[usePrompts] Waiting for device registration...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return deviceReg.deviceId;
+    }
+
+    // Trigger registration
+    if (DEV) console.info('[usePrompts] Device not registered, triggering registration...');
+    const deviceId = await deviceReg.registerUserDevice();
+    return deviceId;
+  }, [deviceReg]);
+
+  /**
    * Get single prompt by ID
    */
   const getPrompt = useCallback(
@@ -122,6 +134,12 @@ export function usePrompts(): UsePromptsResult {
     async (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>): Promise<Prompt> => {
       if (!storage.isReady || !user) {
         throw new Error('Storage not ready or user not authenticated');
+      }
+
+      // Ensure device is registered
+      const deviceId = await ensureDeviceRegistered();
+      if (!deviceId) {
+        throw new Error('Failed to register device');
       }
 
       const now = new Date().toISOString();
@@ -184,6 +202,8 @@ export function usePrompts(): UsePromptsResult {
         },
       });
 
+      if (DEV) console.info('[usePrompts] Prompt created and queued for sync:', id);
+
       await loadPrompts();
 
       const newPrompt: Prompt = {
@@ -199,7 +219,7 @@ export function usePrompts(): UsePromptsResult {
 
       return newPrompt;
     },
-    [storage, user, deviceId, syncQueue, loadPrompts]
+    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -212,6 +232,12 @@ export function usePrompts(): UsePromptsResult {
     ): Promise<Prompt> => {
       if (!storage.isReady || !user) {
         throw new Error('Storage not ready or user not authenticated');
+      }
+
+      // Ensure device is registered
+      const deviceId = await ensureDeviceRegistered();
+      if (!deviceId) {
+        throw new Error('Failed to register device');
       }
 
       const existing = await storage.getPromptById(id);
@@ -307,7 +333,7 @@ export function usePrompts(): UsePromptsResult {
         updatedAt: now,
       };
     },
-    [storage, user, syncQueue, loadPrompts]
+    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -315,8 +341,14 @@ export function usePrompts(): UsePromptsResult {
    */
   const deletePrompt = useCallback(
     async (id: string): Promise<void> => {
-      if (!storage.isReady) {
-        throw new Error('Storage not ready');
+      if (!storage.isReady || !user) {
+        throw new Error('Storage not ready or user not authenticated');
+      }
+
+      // Ensure device is registered
+      const deviceId = await ensureDeviceRegistered();
+      if (!deviceId) {
+        throw new Error('Failed to register device');
       }
 
       await storage.softDeletePrompt(id);
@@ -331,7 +363,7 @@ export function usePrompts(): UsePromptsResult {
 
       await loadPrompts();
     },
-    [storage, syncQueue, loadPrompts]
+    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -341,6 +373,12 @@ export function usePrompts(): UsePromptsResult {
     async (reorderedPrompts: Prompt[]): Promise<void> => {
       if (!storage.isReady || !user) {
         throw new Error('Storage not ready or user not authenticated');
+      }
+
+      // Ensure device is registered
+      const deviceId = await ensureDeviceRegistered();
+      if (!deviceId) {
+        throw new Error('Failed to register device');
       }
 
       const now = new Date().toISOString();
@@ -382,7 +420,7 @@ export function usePrompts(): UsePromptsResult {
 
       await loadPrompts();
     },
-    [storage, user, syncQueue, loadPrompts]
+    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**

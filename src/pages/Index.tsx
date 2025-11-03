@@ -179,34 +179,48 @@ const Index = () => {
   }, [prompts]);
 
   const filteredPrompts = useMemo(() => {
+    // Filter out invalid prompts
+    const validPrompts = prompts.filter(p => p && p.id && p.title && p.content);
+    
     const query = searchQuery.toLowerCase();
-    let filtered = prompts.filter((prompt) => {
+    let filtered = validPrompts.filter((prompt) => {
       if (!query) return true;
       return (
         prompt.title.toLowerCase().includes(query) ||
         prompt.content.toLowerCase().includes(query) ||
-        prompt.tags.some((tag) => tag.toLowerCase().includes(query))
+        (prompt.tags && prompt.tags.some((tag) => tag.toLowerCase().includes(query)))
       );
     });
 
-    // Sort based on mode
-    if (sortMode === 'manual') {
-      filtered = filtered.sort((a, b) => {
-        if (a.isPinned !== b.isPinned) {
-          return a.isPinned ? -1 : 1;
-        }
-        return (a.order || 0) - (b.order || 0);
-      });
-    } else {
-      filtered = filtered.sort((a, b) => {
-        if (a.isPinned !== b.isPinned) {
-          return a.isPinned ? -1 : 1;
-        }
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-      });
-    }
+    // Always prioritize pinned prompts first
+    const pinned = filtered.filter(p => p.isPinned);
+    const unpinned = filtered.filter(p => !p.isPinned);
 
-    return filtered;
+    switch (sortMode) {
+      case 'date':
+        return [
+          ...pinned.sort((a, b) => 
+            new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+          ),
+          ...unpinned.sort((a, b) => 
+            new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
+          )
+        ];
+      case 'manual':
+      default:
+        return [
+          ...pinned.sort((a, b) => {
+            const aOrder = a.order ?? new Date(a.createdAt).getTime();
+            const bOrder = b.order ?? new Date(b.createdAt).getTime();
+            return aOrder - bOrder;
+          }),
+          ...unpinned.sort((a, b) => {
+            const aOrder = a.order ?? new Date(a.createdAt).getTime();
+            const bOrder = b.order ?? new Date(b.createdAt).getTime();
+            return aOrder - bOrder;
+          })
+        ];
+    }
   }, [prompts, searchQuery, sortMode]);
 
   // Show conflicts dialog when conflicts exist

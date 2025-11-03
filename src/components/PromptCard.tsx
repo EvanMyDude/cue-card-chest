@@ -14,6 +14,12 @@ interface PromptCardProps {
 }
 
 export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }: PromptCardProps) {
+  // Defensive checks for incomplete prompt data
+  if (!prompt || !prompt.id || !prompt.title || !prompt.content) {
+    console.warn('[PromptCard] Incomplete prompt data:', prompt);
+    return null;
+  }
+
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(prompt.content);
@@ -24,12 +30,18 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
+    if (!dateString) return 'Unknown date';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch {
+      return 'Invalid date';
+    }
   };
 
   return (
@@ -45,7 +57,7 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
             {prompt.title}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {formatDate(prompt.updatedAt)} • {prompt.content.length} chars
+            {formatDate(prompt.updatedAt || prompt.createdAt)} • {prompt.content?.length || 0} chars
           </p>
         </div>
         <Button
@@ -74,10 +86,10 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
         </p>
       </div>
 
-      {prompt.tags.length > 0 && (
+      {prompt.tags && prompt.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-4">
-          {[...prompt.tags].sort((a, b) => a.localeCompare(b)).map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
+          {[...prompt.tags].sort((a, b) => a.localeCompare(b)).map((tag, idx) => (
+            <Badge key={`${tag}-${idx}`} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
