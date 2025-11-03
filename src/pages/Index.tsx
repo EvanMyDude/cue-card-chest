@@ -37,13 +37,16 @@ const Index = () => {
     prompts, 
     loading, 
     syncStatus, 
-    conflicts, 
+    conflicts,
+    queuePending,
+    queueParked,
     createPrompt, 
     updatePrompt, 
     deletePrompt, 
     reorderPrompts,
     syncNow,
     resolveConflict,
+    retryParked,
     refresh,
   } = usePrompts();
   const [searchQuery, setSearchQuery] = useState('');
@@ -236,8 +239,15 @@ const Index = () => {
   };
 
   const handleClearLocal = async () => {
-    // This would clear IndexedDB - implement if needed
-    toast.info('Local data cleared');
+    try {
+      const { clearIndexedDBData } = await import('@/lib/rollback');
+      await clearIndexedDBData();
+      await refresh();
+      toast.success('Local data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing local data:', error);
+      toast.error('Failed to clear local data');
+    }
   };
 
   const conflictData = conflicts.map((c) => ({
@@ -251,7 +261,9 @@ const Index = () => {
       <SyncStatusBanner
         status={syncStatus}
         conflictCount={conflicts.length}
+        parkedCount={queueParked}
         onResolveConflicts={() => setConflictDialogOpen(true)}
+        onRetryParked={retryParked}
       />
       
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -303,10 +315,10 @@ const Index = () => {
               <ExportButton prompts={prompts} onExport={playSuccess} />
               <SettingsDialog
                 lastSyncTime={Date.now()}
-                queuePending={0}
-                queueParked={0}
+                queuePending={queuePending}
+                queueParked={queueParked}
                 onManualSync={syncNow}
-                onRetryParked={async () => {}}
+                onRetryParked={retryParked}
                 onClearLocal={handleClearLocal}
               />
             </div>

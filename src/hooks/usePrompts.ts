@@ -12,6 +12,8 @@ export interface UsePromptsResult {
   loading: boolean;
   syncStatus: SyncStatus;
   conflicts: ConflictRecord[];
+  queuePending: number;
+  queueParked: number;
   
   // CRUD operations
   getPrompt: (id: string) => Promise<Prompt | null>;
@@ -23,6 +25,7 @@ export interface UsePromptsResult {
   // Sync operations
   syncNow: () => Promise<void>;
   resolveConflict: (promptId: string, strategy: 'keep-current' | 'use-revision') => Promise<void>;
+  retryParked: () => Promise<void>;
   
   // Utilities
   refresh: () => Promise<void>;
@@ -429,6 +432,8 @@ export function usePrompts(): UsePromptsResult {
     loading,
     syncStatus,
     conflicts,
+    queuePending: syncQueue.status.pending,
+    queueParked: syncQueue.status.parkedItems,
     getPrompt,
     createPrompt,
     updatePrompt,
@@ -436,6 +441,7 @@ export function usePrompts(): UsePromptsResult {
     reorderPrompts,
     syncNow,
     resolveConflict,
+    retryParked: syncQueue.retryParked,
     refresh,
   };
 }
