@@ -1,267 +1,434 @@
-# Offline Storage Layer - IndexedDB Implementation
+# Offline Storage System
 
 ## Overview
-This implementation provides a robust IndexedDB layer for offline-first prompt management, matching the Supabase backend schema.
 
-## Schema Version
-**Current Version:** `1`
+This document describes the offline-first storage architecture using IndexedDB for local persistence and Supabase for cloud sync.
 
-## Database Structure
+## Architecture
 
-### Stores
+### Storage Layers
 
-#### 1. **prompts**
-- **Key:** `id` (UUID)
-- **Indexes:**
-  - `by-updated`: sorted by `updatedAt`
-  - `by-pinned`: sorted by `isPinned`
-  - `by-user`: filtered by `user_id`
-- **Fields:** `id`, `user_id`, `device_id`, `title`, `content`, `checksum`, `isPinned`, `order`, `version`, `tokens`, `createdAt`, `updatedAt`, `archived_at`
-- **Max Size:** 500KB per record
-- **Max Content:** 100,000 characters
-- **Max Title:** 500 characters
+1. **IndexedDB (Primary Local Store)**
+   - Managed by `src/lib/db.ts`
+   - Stores prompts, tags, prompt-tag relationships, sync queue, and device info
+   - Provides offline-first capabilities
+   - Auto-syncs when online
 
-#### 2. **tags**
-- **Key:** `id` (UUID)
-- **Indexes:**
-  - `by-name`: sorted alphabetically
-  - `by-user`: filtered by `user_id`
-- **Fields:** `id`, `user_id`, `name`, `created_at`
+2. **localStorage (Legacy)**
+   - Previous storage mechanism
+   - Used for migration source data
+   - Being phased out in favor of IndexedDB
 
-#### 3. **prompt_tags** (Junction table)
-- **Composite Key:** `[prompt_id, tag_id]`
-- **Indexes:**
-  - `by-prompt`: all tags for a prompt
-  - `by-tag`: all prompts for a tag
-- **Fields:** `prompt_id`, `tag_id`
+3. **Supabase (Cloud Backend)**
+   - Source of truth for multi-device sync
+   - Handles conflict resolution
+   - Stores version history
 
-#### 4. **sync_queue**
-- **Key:** `id` (auto-increment)
-- **Indexes:**
-  - `by-created`: FIFO order
-  - `by-entity`: group by entity_id
-- **Fields:** `id`, `operation`, `entity_type`, `entity_id`, `data`, `created_at`, `attempts`
-- **Purpose:** Tracks pending changes to sync with server
+### Data Flow
 
-#### 5. **device_info** (Single record)
-- **Key:** `'current'` (constant)
-- **Fields:** `key`, `device_id`, `device_name`, `device_type`, `last_sync_at`, `sync_token`
-- **Purpose:** Stores current device registration and sync state
+```
+User Action
+    ↓
+IndexedDB Write (instant)
+    ↓
+Sync Queue (if changes)
+    ↓
+Supabase Sync (when online)
+    ↓
+Conflict Check & Resolution
+    ↓
+Update Local State
+```
 
-## API Usage
+## Components
 
-### Initialization
+### 1. Database Layer (`src/lib/db.ts`)
+
+#### Object Stores
+
+**prompts**
+- Primary key: `id` (UUID)
+- Indexes: `user_id`, `version`, `is_archived`
+- Fields: title, content, tags, version, checksum, timestamps
+
+**tags**
+- Primary key: `id` (UUID)
+- Index: `user_id`
+- Auto-created from prompt tags
+
+**prompt_tags**
+- Composite key: `[prompt_id, tag_id]`
+- Junction table for many-to-many relationship
+
+**sync_queue**
+- Primary key: `id` (auto-increment)
+- Tracks pending operations
+- Fields: operation, prompt_id, retry_count, status
+
+**device_info**
+- Single record per device
+- Stores device_id, last_sync_at, sync_token
+
+#### Size Limits
+
+- Maximum prompt size: 1MB
+- Maximum title length: 500 chars
+- Maximum content length: 100,000 chars
+- Maximum database size: 50MB per user
+
+### 2. Offline Storage Hook (`src/hooks/useOfflineStorage.ts`)
+
+Provides high-level API for IndexedDB operations:
+
+```typescript
+interface UseOfflineStorageResult {
+  isReady: boolean;
+  
+  // Prompts
+  getAllPrompts: () => Promise<PromptRecord[]>;
+  getPrompt: (id: string) => Promise<PromptRecord | undefined>;
+  savePrompt: (prompt: PromptRecord) => Promise<void>;
+  deletePrompt: (id: string) => Promise<void>;
+  
+  // Tags
+  getAllTags: () => Promise<TagRecord[]>;
+  saveTag: (tag: TagRecord) => Promise<void>;
+  
+  // Device Info
+  getDeviceInfo: () => Promise<DeviceInfoRecord | undefined>;
+  setDeviceInfo: (info: DeviceInfoRecord) => Promise<void>;
+  
+  // Utilities
+  clearAll: () => Promise<void>;
+  getStats: () => Promise<DBStats>;
+}
+```
+
+### 3. Sync Queue (`src/hooks/useSyncQueue.ts`)
+
+Manages offline operations and sync:
+
+```typescript
+interface SyncQueueStatus {
+  pendingCount: number;
+  isProcessing: boolean;
+  lastSync: Date | null;
+  errors: string[];
+  parkedCount: number;
+}
+
+interface UseSyncQueueResult {
+  status: SyncQueueStatus;
+  queueOperation: (op: SyncOperation) => Promise<void>;
+  flushQueue: () => Promise<void>;
+  clearQueue: () => Promise<void>;
+  retryParked: () => Promise<void>;
+}
+```
+
+## Usage Examples
+
+### Basic Prompt Operations
+
 ```typescript
 import { useOfflineStorage } from '@/hooks/useOfflineStorage';
 
-const {
-  isReady,
-  error,
-  getPromptById,
-  listPrompts,
-  putPrompt,
-  // ... other methods
-} = useOfflineStorage();
+function MyComponent() {
+  const storage = useOfflineStorage();
 
-// Wait for IndexedDB to be ready
-if (!isReady) return <Loading />;
-if (error) return <Error message={error.message} />;
-```
+  // Wait for IndexedDB to be ready
+  useEffect(() => {
+    if (!storage.isReady) return;
+    
+    loadPrompts();
+  }, [storage.isReady]);
 
-### CRUD Operations
+  const loadPrompts = async () => {
+    const prompts = await storage.getAllPrompts();
+    console.log(prompts);
+  };
 
-#### Prompts
-```typescript
-// Read
-const prompt = await getPromptById('uuid-here');
-const allPrompts = await listPrompts(userId);
+  const savePrompt = async () => {
+    await storage.savePrompt({
+      id: 'uuid-here',
+      user_id: 'user-id',
+      title: 'My Prompt',
+      content: 'Prompt content',
+      version: 1,
+      checksum: 'calculated-checksum',
+      is_archived: false,
+      is_pinned: false,
+      order_index: 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  };
 
-// Create/Update
-await putPrompt({
-  id: 'new-uuid',
-  user_id: userId,
-  title: 'My Prompt',
-  content: 'Prompt content...',
-  checksum: 'computed-hash',
-  isPinned: false,
-  order: 0,
-  version: 1,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-});
-
-// Bulk operations
-await bulkPutPrompts([prompt1, prompt2, prompt3]);
-
-// Soft delete (sets archived_at)
-await softDeletePrompt('uuid-here');
-```
-
-#### Tags
-```typescript
-// Read
-const tag = await getTagById('uuid-here');
-const allTags = await listTags(userId);
-
-// Create/Update
-await putTag({
-  id: 'new-uuid',
-  user_id: userId,
-  name: 'JavaScript',
-  created_at: new Date().toISOString(),
-});
-
-// Bulk
-await bulkPutTags([tag1, tag2]);
-
-// Delete (hard delete)
-await deleteTag('uuid-here');
-```
-
-#### Prompt-Tag Relationships
-```typescript
-// Get all tags for a prompt
-const tags = await getPromptTags('prompt-uuid');
-
-// Replace all tags for a prompt
-await setPromptTags('prompt-uuid', ['tag-uuid-1', 'tag-uuid-2']);
-```
-
-#### Sync Queue
-```typescript
-// Add operation to queue
-await addToSyncQueue({
-  operation: 'update',
-  entity_type: 'prompt',
-  entity_id: 'prompt-uuid',
-  data: { title: 'New Title', content: '...' },
-});
-
-// Get pending operations
-const queue = await getSyncQueue();
-
-// Clear after successful sync
-await clearSyncQueue();
-```
-
-#### Device Info
-```typescript
-// Get current device
-const device = await getDeviceInfo();
-
-// Update device info
-await setDeviceInfo({
-  device_id: 'device-uuid',
-  device_name: 'MacBook Pro',
-  last_sync_at: new Date().toISOString(),
-  sync_token: 'server-token',
-});
-```
-
-## Schema Migrations
-
-### Version 1 (Initial)
-- Created all 5 stores with indexes
-- Defined size limits and validation
-
-### Future Migrations
-When schema needs to change:
-
-1. Increment `DB_VERSION` in `src/lib/db.ts`
-2. Add migration logic in `initDB()` upgrade callback:
-
-```typescript
-// Example: Version 2 migration
-if (oldVersion < 2) {
-  const tx = transaction.objectStore('prompts');
-  tx.createIndex('by-archived', 'archived_at');
+  return <div>...</div>;
 }
 ```
 
-## Size Caps & Validation
+### Sync Queue Operations
 
-### Automatic Validation
-All write operations automatically validate:
-- ✅ UUID format (v4)
-- ✅ Prompt size (max 500KB)
-- ✅ Content length (max 100k chars)
-- ✅ Title length (max 500 chars)
-
-### Error Handling
 ```typescript
-try {
-  await putPrompt(largePrompt);
-} catch (err) {
-  if (err.message.includes('exceeds maximum size')) {
-    // Handle size limit error
-  }
+import { useSyncQueue } from '@/hooks/useSyncQueue';
+
+function SyncStatus() {
+  const syncQueue = useSyncQueue();
+
+  // Queue an operation
+  const queueUpdate = async () => {
+    await syncQueue.queueOperation({
+      operation: 'update',
+      prompt_id: 'uuid',
+      payload: { title: 'Updated' },
+      created_at: Date.now(),
+    });
+  };
+
+  // Manual sync trigger
+  const syncNow = async () => {
+    await syncQueue.flushQueue();
+  };
+
+  // Retry failed operations
+  const retryFailed = async () => {
+    await syncQueue.retryParked();
+  };
+
+  return (
+    <div>
+      <p>Pending: {syncQueue.status.pendingCount}</p>
+      <p>Parked: {syncQueue.status.parkedCount}</p>
+      <button onClick={syncNow}>Sync Now</button>
+      {syncQueue.status.parkedCount > 0 && (
+        <button onClick={retryFailed}>Retry Failed</button>
+      )}
+    </div>
+  );
 }
 ```
 
-## Performance Considerations
+### Complete CRUD with Auto-Sync
 
-### Indexes
-All frequently queried fields are indexed for O(log n) lookups:
-- Prompts: `updatedAt`, `isPinned`, `user_id`
-- Tags: `name`, `user_id`
-- Prompt-Tags: `prompt_id`, `tag_id`
-- Sync Queue: `created_at`, `entity_id`
-
-### Transactions
-- **Read operations:** Use readonly transactions
-- **Bulk writes:** Single readwrite transaction for atomic updates
-- **Cross-store operations:** Multi-store transactions when needed
-
-### Async Patterns
-- All operations return Promises (no blocking)
-- React hook provides cancellation via component unmount
-- Background DB initialization
-
-## Debugging
-
-### Check Store Contents
 ```typescript
-import { getDBStats } from '@/lib/db';
+import { usePrompts } from '@/hooks/usePrompts';
 
-const stats = await getDBStats();
-console.log(stats);
-// { prompts: 42, tags: 15, prompt_tags: 89, sync_queue: 3 }
+function PromptManager() {
+  const {
+    prompts,
+    loading,
+    syncStatus,
+    conflicts,
+    createPrompt,
+    updatePrompt,
+    deletePrompt,
+    syncNow,
+  } = usePrompts();
+
+  const handleCreate = async () => {
+    await createPrompt({
+      title: 'New Prompt',
+      content: 'Content here',
+      tags: ['tag1', 'tag2'],
+      isPinned: false,
+      order: 0,
+    });
+    // Automatically queued for sync
+  };
+
+  const handleUpdate = async (id: string) => {
+    await updatePrompt(id, {
+      title: 'Updated Title',
+    });
+    // Automatically queued for sync
+  };
+
+  const handleDelete = async (id: string) => {
+    await deletePrompt(id);
+    // Soft delete, queued for sync
+  };
+
+  return (
+    <div>
+      <div>Status: {syncStatus}</div>
+      {conflicts.length > 0 && (
+        <div>Conflicts detected: {conflicts.length}</div>
+      )}
+      
+      {loading ? (
+        <div>Loading...</div>
+      ) : (
+        prompts.map(prompt => (
+          <div key={prompt.id}>
+            <h3>{prompt.title}</h3>
+            <button onClick={() => handleUpdate(prompt.id)}>Edit</button>
+            <button onClick={() => handleDelete(prompt.id)}>Delete</button>
+          </div>
+        ))
+      )}
+      
+      <button onClick={handleCreate}>New Prompt</button>
+      <button onClick={syncNow}>Sync Now</button>
+    </div>
+  );
+}
 ```
 
-### Export Data
+## Sync Behavior
+
+### Auto-Sync Triggers
+
+1. **Network Reconnection**: Flushes queue when online
+2. **Periodic Timer**: Syncs every 30 seconds when online
+3. **User Action**: Manual sync via `syncNow()`
+4. **App Focus**: Syncs when app regains focus
+
+### Conflict Detection
+
+Conflicts occur when:
+- Two devices edit the same prompt
+- Edits happen within 30-second window
+- Checksums don't match
+
+Resolution options:
+- Keep local version
+- Use server version
+- Merge changes (manual)
+
+### Queue Management
+
+**Queue Limits**
+- Max queue size: 1,000 operations
+- Max retries per operation: 5 attempts
+- Retry backoff: Exponential with jitter
+
+**Parking Failed Items**
+- Operations that fail 5 times are "parked"
+- Parked items don't block queue
+- User can manually retry parked items
+
+## Performance Optimization
+
+### Batch Operations
+
 ```typescript
+// Instead of multiple single writes
+for (const prompt of prompts) {
+  await storage.savePrompt(prompt); // Slow
+}
+
+// Use batch operations
+const tx = db.transaction('prompts', 'readwrite');
+const store = tx.objectStore('prompts');
+
+for (const prompt of prompts) {
+  store.put(prompt);
+}
+
+await tx.done; // Fast
+```
+
+### Indexing Strategy
+
+- Index frequently queried fields
+- Use compound indexes for multi-field queries
+- Avoid over-indexing (increases write time)
+
+### Memory Management
+
+- Clear unused data periodically
+- Archive old prompts instead of deleting
+- Monitor database size with `getStats()`
+
+## Migration from localStorage
+
+See `MIGRATION_README.md` for full migration details.
+
+Quick overview:
+1. Detect first-time user (no device_info in IndexedDB)
+2. Export localStorage prompts to backup
+3. Import backup to Supabase
+4. Download IndexedDB for offline access
+5. Clear localStorage after confirmation
+
+## Troubleshooting
+
+### Common Issues
+
+**IndexedDB not ready**
+- Symptom: `isReady` is false
+- Cause: Database initialization failed
+- Solution: Check browser console for errors, ensure IndexedDB is enabled
+
+**Sync queue growing unbounded**
+- Symptom: `pendingCount` keeps increasing
+- Cause: Network issues or auth problems
+- Solution: Check network, verify auth state, retry parked items
+
+**Conflicts not resolving**
+- Symptom: Conflict count stays non-zero
+- Cause: User hasn't chosen resolution
+- Solution: Call `resolveConflict()` with chosen strategy
+
+**Data not persisting**
+- Symptom: Data lost after refresh
+- Cause: Not waiting for operations to complete
+- Solution: Always await async operations
+
+### Debugging Tools
+
+```typescript
+// Check database stats
+const stats = await storage.getStats();
+console.log('Database stats:', stats);
+
+// Export all data for inspection
 import { exportAllData } from '@/lib/db';
+const data = await exportAllData();
+console.log('All data:', data);
 
-const backup = await exportAllData();
-console.log(backup);
-// { version: 1, exported_at: '...', data: { prompts, tags, ... } }
+// Check sync queue status
+console.log('Queue status:', syncQueue.status);
+
+// View rollback logs
+import { getRollbackLogs } from '@/lib/rollback';
+const logs = getRollbackLogs();
+console.log('Rollback history:', logs);
 ```
 
-### Clear Stores
-```typescript
-import { clearStore } from '@/lib/db';
+## Best Practices
 
-await clearStore('prompts');
-await clearStore('sync_queue');
-```
+1. **Always Check isReady**: Wait for IndexedDB before operations
+2. **Handle Errors**: Wrap operations in try-catch
+3. **Validate Data**: Check size limits before writing
+4. **Monitor Queue**: Display pending count to users
+5. **Test Offline**: Verify app works without network
+6. **Backup Regularly**: Create backups before destructive ops
+7. **Clean Up**: Archive or delete old data periodically
 
-## Next Steps
+## Security
 
-**Phase 3.3:** Sync Engine
-- Implement device registration on first login
-- Build bidirectional sync logic
-- Handle conflict resolution flow
-- Add background sync with retry logic
+1. **User Isolation**: All queries filtered by `user_id`
+2. **RLS Policies**: Supabase enforces row-level security
+3. **Client-Side Validation**: Size and format checks
+4. **No Service Keys**: Client never has admin access
+5. **Audit Logging**: All operations logged for accountability
 
-**Phase 3.4:** UI Integration
-- Wire `useOfflineStorage` to existing components
-- Replace localStorage with IndexedDB
-- Add sync status indicators
-- Show conflict resolution UI
+## Future Improvements
 
-## Notes
+- [ ] Compression for large prompts
+- [ ] Delta sync (only changed fields)
+- [ ] Conflict prevention (edit locks)
+- [ ] P2P sync between devices
+- [ ] Background sync with Service Workers
+- [ ] Automatic schema migrations
+- [ ] Query result caching
+- [ ] Full-text search indexing
 
-- **Not wired to UI yet** - awaiting review before integration
-- **No network calls** - pure offline storage layer
-- **Schema versioning ready** - easy to migrate in future
-- **Typed throughout** - full TypeScript support
+## Related Documentation
+
+- `SYNC_ENGINE_README.md`: Sync implementation details
+- `MIGRATION_README.md`: Migration from localStorage
+- `ROLLBACK.md`: Data recovery procedures
+- `TESTING.md`: Testing guidelines
