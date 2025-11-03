@@ -1,1 +1,16 @@
 project_id = "diawrfdqrmftuagwwlva"
+
+[functions.generate-title]
+verify_jwt = false
+
+[functions.register-device]
+verify_jwt = true
+
+[functions.sync-prompts]
+verify_jwt = true
+
+[functions.resolve-conflict]
+verify_jwt = true
+
+[functions.purge-archived]
+verify_jwt = true
