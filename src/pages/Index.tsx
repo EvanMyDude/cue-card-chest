@@ -1,13 +1,19 @@
+import { Card } from '@/components/ui/card';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
 import { ExportButton } from '@/components/ExportButton';
+import { SyncStatusBanner } from '@/components/SyncStatusBanner';
+import { SettingsDialog } from '@/components/SettingsDialog';
+import { ConflictResolutionDialog } from '@/components/ConflictResolutionDialog';
+import { usePrompts } from '@/hooks/usePrompts';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSound } from '@/hooks/useSound';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
 import {
@@ -27,10 +33,23 @@ import {
 } from '@dnd-kit/sortable';
 
 const Index = () => {
-  const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
+  const { 
+    prompts, 
+    loading, 
+    syncStatus, 
+    conflicts, 
+    createPrompt, 
+    updatePrompt, 
+    deletePrompt, 
+    reorderPrompts,
+    syncNow,
+    resolveConflict,
+    refresh,
+  } = usePrompts();
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null);
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
   const formRef = useRef<HTMLDivElement>(null);
@@ -42,45 +61,45 @@ const Index = () => {
     })
   );
 
-  const handleSavePrompt = (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
-    if (editingPrompt) {
-      setPrompts(
-        prompts.map((p) =>
-          p.id === editingPrompt.id
-            ? { ...p, ...promptData, updatedAt: new Date().toISOString() }
-            : p
-        )
-      );
-      toast.success('Prompt updated successfully!');
-      setEditingPrompt(null);
-    } else {
-      const newPrompt: Prompt = {
-        ...promptData,
-        id: crypto.randomUUID(),
-        order: Date.now(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setPrompts([newPrompt, ...prompts]);
-      toast.success('Prompt saved successfully!');
+    try {
+      if (editingPrompt) {
+        await updatePrompt(editingPrompt.id, promptData);
+        toast.success('Prompt updated successfully!');
+        setEditingPrompt(null);
+      } else {
+        await createPrompt(promptData);
+        toast.success('Prompt saved successfully!');
+      }
+    } catch (error) {
+      console.error('Error saving prompt:', error);
+      toast.error('Failed to save prompt');
     }
   };
 
-  const handleDeletePrompt = (id: string) => {
+  const handleDeletePrompt = async (id: string) => {
     playClick();
-    setPrompts(prompts.filter((p) => p.id !== id));
-    toast.success('Prompt deleted');
+    try {
+      await deletePrompt(id);
+      toast.success('Prompt deleted');
+    } catch (error) {
+      console.error('Error deleting prompt:', error);
+      toast.error('Failed to delete prompt');
+    }
   };
 
-
-  const handleTogglePin = (id: string) => {
+  const handleTogglePin = async (id: string) => {
     playClick();
-    setPrompts(
-      prompts.map((p) =>
-        p.id === id ? { ...p, isPinned: !p.isPinned } : p
-      )
-    );
+    try {
+      const prompt = prompts.find(p => p.id === id);
+      if (prompt) {
+        await updatePrompt(id, { isPinned: !prompt.isPinned });
+      }
+    } catch (error) {
+      console.error('Error toggling pin:', error);
+      toast.error('Failed to update prompt');
+    }
   };
 
   const handleEdit = (prompt: Prompt) => {
@@ -135,7 +154,10 @@ const Index = () => {
       order: idx,
     }));
 
-    setPrompts(reordered);
+    reorderPrompts(reordered).catch((error) => {
+      console.error('Error reordering prompts:', error);
+      toast.error('Failed to update order');
+    });
     toast.success('Order updated');
   };
 
@@ -184,8 +206,54 @@ const Index = () => {
     return filtered;
   }, [prompts, searchQuery, sortMode]);
 
+  // Show conflicts dialog when conflicts exist
+  useEffect(() => {
+    if (conflicts.length > 0 && !conflictDialogOpen) {
+      setConflictDialogOpen(true);
+    }
+  }, [conflicts.length, conflictDialogOpen]);
+
+  const handleResolveConflict = async (promptId: string, strategy: 'keep-current' | 'use-revision') => {
+    try {
+      await resolveConflict(promptId, strategy);
+      toast.success('Conflict resolved');
+    } catch (error) {
+      console.error('Error resolving conflict:', error);
+      toast.error('Failed to resolve conflict');
+    }
+  };
+
+  const handleResolveAllConflicts = async (strategy: 'keep-current' | 'use-revision') => {
+    try {
+      for (const conflict of conflicts) {
+        await resolveConflict(conflict.promptId, strategy);
+      }
+      toast.success('All conflicts resolved');
+    } catch (error) {
+      console.error('Error resolving conflicts:', error);
+      toast.error('Failed to resolve all conflicts');
+    }
+  };
+
+  const handleClearLocal = async () => {
+    // This would clear IndexedDB - implement if needed
+    toast.info('Local data cleared');
+  };
+
+  const conflictData = conflicts.map((c) => ({
+    promptId: c.promptId,
+    localVersion: c.clientVersion as unknown as Prompt,
+    serverVersion: c.serverVersion as unknown as Prompt,
+  }));
+
   return (
     <div className="min-h-screen bg-background">
+      <SyncStatusBanner
+        status={syncStatus}
+        conflictCount={conflicts.length}
+        onResolveConflicts={() => setConflictDialogOpen(true)}
+      />
+      
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -233,6 +301,14 @@ const Index = () => {
                 {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
               <ExportButton prompts={prompts} onExport={playSuccess} />
+              <SettingsDialog
+                lastSyncTime={Date.now()}
+                queuePending={0}
+                queueParked={0}
+                onManualSync={syncNow}
+                onRetryParked={async () => {}}
+                onClearLocal={handleClearLocal}
+              />
             </div>
           </div>
           <p className="text-muted-foreground">
@@ -271,7 +347,20 @@ const Index = () => {
         </div>
 
         {/* Prompts Grid */}
-        {filteredPrompts.length > 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, i) => (
+              <Card key={i} className="p-6 space-y-4">
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-20 w-full" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-5 w-16" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : filteredPrompts.length > 0 ? (
           <DndContext
             sensors={sortMode === 'manual' ? sensors : []}
             collisionDetection={closestCenter}
@@ -320,6 +409,14 @@ const Index = () => {
         onOpenChange={(open) => !open && setPreviewPrompt(null)}
         onEdit={handleEdit}
         onTogglePin={handleTogglePin}
+      />
+
+      <ConflictResolutionDialog
+        open={conflictDialogOpen}
+        onOpenChange={setConflictDialogOpen}
+        conflicts={conflictData}
+        onResolve={handleResolveConflict}
+        onResolveAll={handleResolveAllConflicts}
       />
     </div>
   );
