@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { useOfflineStorage } from './useOfflineStorage';
+import { useSyncContext } from '@/contexts/SyncContext';
 import { registerDevice } from '@/lib/syncEngine';
 
 const DEV = import.meta.env.DEV;
@@ -20,7 +21,7 @@ interface DeviceRegistrationState {
 export function useDeviceRegistration() {
   const { user } = useAuth();
   const storage = useOfflineStorage();
-  const { syncEnabled } = require('@/contexts/SyncContext').useSyncContext();
+  const { syncEnabled } = useSyncContext();
   
   const [state, setState] = useState<DeviceRegistrationState>({
     deviceId: null,

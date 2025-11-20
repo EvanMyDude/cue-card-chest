@@ -3,6 +3,7 @@ import { useOfflineStorage } from './useOfflineStorage';
 import { useSyncQueue } from './useSyncQueue';
 import { useDeviceRegistration } from './useDeviceRegistration';
 import { useAuth } from './useAuth';
+import { useSyncContext } from '@/contexts/SyncContext';
 import { computeChecksum } from '@/lib/checksum';
 import { onSyncEvent, type SyncStatus, type ConflictRecord } from '@/lib/syncEngine';
 import type { Prompt } from '@/types/prompt';
@@ -42,7 +43,7 @@ export function usePrompts(): UsePromptsResult {
   const { user } = useAuth();
   const storage = useOfflineStorage();
   const deviceReg = useDeviceRegistration();
-  const { syncEnabled } = require('@/contexts/SyncContext').useSyncContext();
+  const { syncEnabled } = useSyncContext();
   
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
