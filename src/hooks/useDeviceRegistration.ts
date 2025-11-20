@@ -20,6 +20,7 @@ interface DeviceRegistrationState {
 export function useDeviceRegistration() {
   const { user } = useAuth();
   const storage = useOfflineStorage();
+  const { syncEnabled } = require('@/contexts/SyncContext').useSyncContext();
   
   const [state, setState] = useState<DeviceRegistrationState>({
     deviceId: null,
@@ -101,7 +102,8 @@ export function useDeviceRegistration() {
    * Check if device needs registration and auto-register
    */
   const checkAndRegister = useCallback(async () => {
-    if (!user || !storage.isReady) {
+    // Skip if sync is disabled
+    if (!syncEnabled || !user || !storage.isReady) {
       return;
     }
 
