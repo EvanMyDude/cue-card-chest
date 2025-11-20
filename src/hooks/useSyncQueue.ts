@@ -29,7 +29,8 @@ const AUTO_FLUSH_INTERVAL_MS = 30000; // 30 seconds
  */
 export function useSyncQueue(
   deviceId: string | undefined,
-  userId: string | undefined
+  userId: string | undefined,
+  enabled: boolean = true
 ): UseSyncQueueResult {
   const storage = useOfflineStorage();
   
@@ -42,6 +43,17 @@ export function useSyncQueue(
 
   const flushTimerRef = useRef<number>();
   const isFlushingRef = useRef(false);
+
+  // Return no-op functions if sync is disabled
+  if (!enabled) {
+    return {
+      status: { pending: 0, processing: false, errors: [], parkedItems: 0 },
+      queueOperation: async () => {},
+      flushQueue: async () => {},
+      clearQueue: async () => {},
+      retryParked: async () => {},
+    };
+  }
 
   /**
    * Update queue status from IndexedDB

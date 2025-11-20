@@ -42,31 +42,39 @@ export function usePrompts(): UsePromptsResult {
   const { user } = useAuth();
   const storage = useOfflineStorage();
   const deviceReg = useDeviceRegistration();
+  const { syncEnabled } = require('@/contexts/SyncContext').useSyncContext();
   
   const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [conflicts, setConflicts] = useState<ConflictRecord[]>([]);
 
-  // Initialize sync queue with device ID from useDeviceRegistration
-  const syncQueue = useSyncQueue(deviceReg.deviceId || undefined, user?.id);
+  // Use 'local-user' as fallback when sync is disabled
+  const effectiveUserId = syncEnabled && user ? user.id : 'local-user';
+  
+  // Initialize sync queue only if sync is enabled
+  const syncQueue = useSyncQueue(
+    syncEnabled ? deviceReg.deviceId || undefined : undefined,
+    syncEnabled ? user?.id : undefined,
+    syncEnabled
+  );
 
   /**
    * Load prompts from IndexedDB
    */
   const loadPrompts = useCallback(async () => {
-    if (!storage.isReady || !user) {
+    if (!storage.isReady) {
       return;
     }
 
     try {
-      const loadedPrompts = await storage.listPrompts(user.id);
+      const loadedPrompts = await storage.listPrompts(effectiveUserId);
       if (DEV) console.info('[usePrompts] Loaded prompts from IndexedDB:', loadedPrompts.length);
       setPrompts(loadedPrompts);
     } catch (err) {
       console.error('[usePrompts] Failed to load prompts:', err);
     }
-  }, [storage, user]);
+  }, [storage, effectiveUserId]);
 
   /**
    * Initial load
@@ -99,6 +107,11 @@ export function usePrompts(): UsePromptsResult {
    * Ensure device is registered before operations
    */
   const ensureDeviceRegistered = useCallback(async (): Promise<string | null> => {
+    // Skip device registration if sync is disabled
+    if (!syncEnabled) {
+      return null;
+    }
+
     if (deviceReg.deviceId) {
       return deviceReg.deviceId;
     }
@@ -114,7 +127,7 @@ export function usePrompts(): UsePromptsResult {
     if (DEV) console.info('[usePrompts] Device not registered, triggering registration...');
     const deviceId = await deviceReg.registerUserDevice();
     return deviceId;
-  }, [deviceReg]);
+  }, [deviceReg, syncEnabled]);
 
   /**
    * Get single prompt by ID
