@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
+import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
 import { ExportButton } from '@/components/ExportButton';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -29,8 +30,10 @@ const Index = () => {
   const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
+  const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null);
   const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -70,20 +73,6 @@ const Index = () => {
     toast.success('Prompt deleted');
   };
 
-  const handleDuplicatePrompt = (prompt: Prompt) => {
-    playSuccess();
-    const duplicated: Prompt = {
-      ...prompt,
-      id: crypto.randomUUID(),
-      title: `${prompt.title} (Copy)`,
-      order: Date.now(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      isPinned: false,
-    };
-    setPrompts([duplicated, ...prompts]);
-    toast.success('Prompt duplicated!');
-  };
 
   const handleTogglePin = (id: string) => {
     playClick();
@@ -94,6 +83,20 @@ const Index = () => {
     );
   };
 
+  const handleEdit = (prompt: Prompt) => {
+    setEditingPrompt(prompt);
+    // Scroll form into view smoothly
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
+
+  useEffect(() => {
+    if (editingPrompt) {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [editingPrompt]);
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -103,19 +106,37 @@ const Index = () => {
       return;
     }
 
-    if (over && active.id !== over.id) {
-      playClick();
-      const oldIndex = prompts.findIndex((p) => p.id === active.id);
-      const newIndex = prompts.findIndex((p) => p.id === over.id);
-
-      const reordered = arrayMove(prompts, oldIndex, newIndex).map((p, idx) => ({
-        ...p,
-        order: idx,
-      }));
-
-      setPrompts(reordered);
-      toast.success('Order updated');
+    // Avoid confusing partial updates while searching
+    if (searchQuery) {
+      toast.info('Clear the search to reorder prompts');
+      return;
     }
+
+    if (!over || active.id === over.id) return;
+
+    playClick();
+
+    const oldIndex = filteredPrompts.findIndex((p) => p.id === active.id);
+    const newIndex = filteredPrompts.findIndex((p) => p.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Keep reordering within the same pin group to avoid confusing jumps
+    const activePinned = filteredPrompts[oldIndex].isPinned;
+    const overPinned = filteredPrompts[newIndex].isPinned;
+    if (activePinned !== overPinned) {
+      toast.info('Reorder within pinned or unpinned groups');
+      return;
+    }
+
+    const reorderedVisible = arrayMove(filteredPrompts, oldIndex, newIndex);
+    const reordered = reorderedVisible.map((p, idx) => ({
+      ...p,
+      order: idx,
+    }));
+
+    setPrompts(reordered);
+    toast.success('Order updated');
   };
 
   const handleDragStart = () => {
@@ -123,6 +144,14 @@ const Index = () => {
       toast.info('Switch to Manual Order mode to reorder prompts');
     }
   };
+
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    prompts.forEach(prompt => {
+      prompt.tags.forEach(tag => tagSet.add(tag));
+    });
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+  }, [prompts]);
 
   const filteredPrompts = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -212,13 +241,14 @@ const Index = () => {
         </div>
 
         {/* Form */}
-        <div className="mb-8">
+        <div ref={formRef} className="mb-8">
           <PromptForm
             onSave={handleSavePrompt}
             editingPrompt={editingPrompt}
             onCancelEdit={() => setEditingPrompt(null)}
             onGenerateTitle={playSuccess}
             onCancel={playClick}
+            existingTags={allTags}
           />
         </div>
 
@@ -257,10 +287,11 @@ const Index = () => {
                   <SortablePromptCard
                     key={prompt.id}
                     prompt={prompt}
-                    onEdit={setEditingPrompt}
+                    onEdit={handleEdit}
                     onDelete={handleDeletePrompt}
-                    onDuplicate={handleDuplicatePrompt}
                     onTogglePin={handleTogglePin}
+                    onPreview={setPreviewPrompt}
+                    isDragEnabled={sortMode === 'manual'}
                   />
                 ))}
               </div>
@@ -282,6 +313,14 @@ const Index = () => {
           </div>
         )}
       </div>
+
+      <PromptPreviewDialog
+        prompt={previewPrompt}
+        open={!!previewPrompt}
+        onOpenChange={(open) => !open && setPreviewPrompt(null)}
+        onEdit={handleEdit}
+        onTogglePin={handleTogglePin}
+      />
     </div>
   );
 };

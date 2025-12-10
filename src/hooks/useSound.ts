@@ -1,66 +1,59 @@
 import { useCallback, useRef } from 'react';
 import { useLocalStorage } from './useLocalStorage';
 
-// Crisp, tactile click sound using Web Audio API
+// Subtle, tactile click using short noise burst + high-pass filter
 const createClickSound = () => {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
+  const duration = 0.02; // 20ms
+  const buffer = audioContext.createBuffer(1, Math.ceil(audioContext.sampleRate * duration), audioContext.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) {
+    // very low amplitude noise
+    data[i] = (Math.random() * 2 - 1) * 0.02;
+  }
+  const source = audioContext.createBufferSource();
+  source.buffer = buffer;
+
+  const filter = audioContext.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 1000;
+
   const gainNode = audioContext.createGain();
-  
-  oscillator.connect(gainNode);
+  const now = audioContext.currentTime;
+  gainNode.gain.setValueAtTime(0.05, now);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+  source.connect(filter);
+  filter.connect(gainNode);
   gainNode.connect(audioContext.destination);
-  
-  // Sharp, minimal click
-  oscillator.frequency.value = 1200;
-  oscillator.type = 'sine';
-  
-  gainNode.gain.setValueAtTime(0.08, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.03);
-  
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 0.03);
+
+  source.start(now);
+  source.stop(now + duration);
 };
 
-// Crisp success sound with gentle upward tone
+// Ultra-short confirm chirp
 const createSuccessSound = () => {
   const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
-  
+
+  const now = audioContext.currentTime;
+  oscillator.type = 'triangle';
+  oscillator.frequency.setValueAtTime(900, now);
+  oscillator.frequency.linearRampToValueAtTime(1200, now + 0.06);
+
+  gainNode.gain.setValueAtTime(0.04, now);
+  gainNode.gain.exponentialRampToValueAtTime(0.003, now + 0.06);
+
   oscillator.connect(gainNode);
   gainNode.connect(audioContext.destination);
-  
-  oscillator.frequency.value = 800;
-  oscillator.type = 'sine';
-  
-  gainNode.gain.setValueAtTime(0.06, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
-  
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 0.08);
-  
-  // Second tone for subtle harmony
-  setTimeout(() => {
-    const audioContext2 = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator2 = audioContext2.createOscillator();
-    const gainNode2 = audioContext2.createGain();
-    
-    oscillator2.connect(gainNode2);
-    gainNode2.connect(audioContext2.destination);
-    
-    oscillator2.frequency.value = 1000;
-    oscillator2.type = 'sine';
-    
-    gainNode2.gain.setValueAtTime(0.05, audioContext2.currentTime);
-    gainNode2.gain.exponentialRampToValueAtTime(0.01, audioContext2.currentTime + 0.08);
-    
-    oscillator2.start(audioContext2.currentTime);
-    oscillator2.stop(audioContext2.currentTime + 0.08);
-  }, 40);
+
+  oscillator.start(now);
+  oscillator.stop(now + 0.07);
 };
 
 export const useSound = () => {
-  const [soundEnabled, setSoundEnabled] = useLocalStorage('sound-enabled', true);
+  const [soundEnabled, setSoundEnabled] = useLocalStorage('sound-enabled', false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const playClick = useCallback(() => {
