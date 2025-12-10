@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,16 +15,14 @@ interface PromptFormProps {
   onCancelEdit?: () => void;
   onGenerateTitle?: () => void;
   onCancel?: () => void;
-  existingTags?: string[];
 }
 
-export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitle, onCancel, existingTags = [] }: PromptFormProps) {
+export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitle, onCancel }: PromptFormProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   useEffect(() => {
     if (editingPrompt) {
@@ -105,52 +103,14 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     setTagInput('');
   };
 
-  const suggestedTags = useMemo(() => {
-    if (!tagInput.trim()) return [];
-    
-    const input = tagInput.toLowerCase();
-    const availableTags = existingTags.filter(tag => !tags.includes(tag));
-    
-    return availableTags
-      .filter(tag => tag.toLowerCase().includes(input))
-      .sort((a, b) => {
-        const aStarts = a.toLowerCase().startsWith(input);
-        const bStarts = b.toLowerCase().startsWith(input);
-        if (aStarts && !bStarts) return -1;
-        if (!aStarts && bStarts) return 1;
-        return a.localeCompare(b);
-      })
-      .slice(0, 10);
-  }, [tagInput, existingTags, tags]);
-
-  const addTag = (newTag: string) => {
-    const tag = newTag.trim().toLowerCase();
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag]);
-    }
-    setTagInput('');
-    setSelectedSuggestionIndex(-1);
-  };
-
   const handleAddTag = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      if (selectedSuggestionIndex >= 0 && suggestedTags[selectedSuggestionIndex]) {
-        addTag(suggestedTags[selectedSuggestionIndex]);
-      } else {
-        addTag(tagInput);
+      const newTag = tagInput.trim().toLowerCase();
+      if (!tags.includes(newTag)) {
+        setTags([...tags, newTag]);
       }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedSuggestionIndex(prev => 
-        prev < suggestedTags.length - 1 ? prev + 1 : prev
-      );
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
-    } else if (e.key === 'Escape') {
       setTagInput('');
-      setSelectedSuggestionIndex(-1);
     }
   };
 
@@ -164,14 +124,8 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     setContent('');
     setTags([]);
     setTagInput('');
-    setSelectedSuggestionIndex(-1);
     onCancelEdit?.();
   };
-
-  // Reset suggestion index when suggestions change
-  useEffect(() => {
-    setSelectedSuggestionIndex(-1);
-  }, [suggestedTags.length]);
 
   return (
     <Card className="p-6 border-border bg-card">
@@ -204,42 +158,21 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
             onChange={(e) => setContent(e.target.value)}
             required
             rows={8}
-            className="resize-y bg-secondary border-border min-h-[200px]"
+            className="resize-none bg-secondary border-border"
           />
           <p className="text-sm text-muted-foreground mt-2">
             {content.length} characters
           </p>
         </div>
 
-        <div className="relative">
+        <div>
           <Input
             placeholder="Add tags (press Enter)"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={handleAddTag}
-            className="bg-secondary border-border text-foreground"
+            className="bg-secondary border-border"
           />
-          {tagInput.trim() && suggestedTags.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-              {suggestedTags.map((tag, index) => (
-                <div
-                  key={tag}
-                  className={`px-3 py-2 cursor-pointer text-sm transition-colors ${
-                    index === selectedSuggestionIndex 
-                      ? 'bg-accent text-accent-foreground' 
-                      : 'text-foreground hover:bg-accent/50'
-                  }`}
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // Prevent input blur
-                    addTag(tag);
-                  }}
-                  onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                >
-                  {tag}
-                </div>
-              ))}
-            </div>
-          )}
           <div className="flex flex-wrap gap-2 mt-3">
             {tags.map((tag) => (
               <Badge key={tag} variant="secondary" className="gap-1">

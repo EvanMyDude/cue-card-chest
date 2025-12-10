@@ -1,20 +1,12 @@
-import { Card } from '@/components/ui/card';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
-import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
 import { ExportButton } from '@/components/ExportButton';
-import { SyncStatusBanner } from '@/components/SyncStatusBanner';
-import { SettingsDialog } from '@/components/SettingsDialog';
-import { ConflictResolutionDialog } from '@/components/ConflictResolutionDialog';
-import { usePrompts } from '@/hooks/usePrompts';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSound } from '@/hooks/useSound';
-import { useSyncContext } from '@/contexts/SyncContext';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
 import {
@@ -34,30 +26,11 @@ import {
 } from '@dnd-kit/sortable';
 
 const Index = () => {
-  const { syncEnabled } = useSyncContext();
-  const { 
-    prompts, 
-    loading, 
-    syncStatus, 
-    conflicts,
-    queuePending,
-    queueParked,
-    createPrompt, 
-    updatePrompt, 
-    deletePrompt, 
-    reorderPrompts,
-    syncNow,
-    resolveConflict,
-    retryParked,
-    refresh,
-  } = usePrompts();
+  const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
-  const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null);
-  const [conflictDialogOpen, setConflictDialogOpen] = useState(false);
   const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
-  const formRef = useRef<HTMLDivElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -66,60 +39,60 @@ const Index = () => {
     })
   );
 
-  const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handleSavePrompt = (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
-    try {
-      if (editingPrompt) {
-        await updatePrompt(editingPrompt.id, promptData);
-        toast.success('Prompt updated successfully!');
-        setEditingPrompt(null);
-      } else {
-        await createPrompt(promptData);
-        toast.success('Prompt saved successfully!');
-      }
-    } catch (error) {
-      console.error('Error saving prompt:', error);
-      toast.error('Failed to save prompt');
-    }
-  };
-
-  const handleDeletePrompt = async (id: string) => {
-    playClick();
-    try {
-      await deletePrompt(id);
-      toast.success('Prompt deleted');
-    } catch (error) {
-      console.error('Error deleting prompt:', error);
-      toast.error('Failed to delete prompt');
-    }
-  };
-
-  const handleTogglePin = async (id: string) => {
-    playClick();
-    try {
-      const prompt = prompts.find(p => p.id === id);
-      if (prompt) {
-        await updatePrompt(id, { isPinned: !prompt.isPinned });
-      }
-    } catch (error) {
-      console.error('Error toggling pin:', error);
-      toast.error('Failed to update prompt');
-    }
-  };
-
-  const handleEdit = (prompt: Prompt) => {
-    setEditingPrompt(prompt);
-    // Scroll form into view smoothly
-    setTimeout(() => {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 100);
-  };
-
-  useEffect(() => {
     if (editingPrompt) {
-      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setPrompts(
+        prompts.map((p) =>
+          p.id === editingPrompt.id
+            ? { ...p, ...promptData, updatedAt: new Date().toISOString() }
+            : p
+        )
+      );
+      toast.success('Prompt updated successfully!');
+      setEditingPrompt(null);
+    } else {
+      const newPrompt: Prompt = {
+        ...promptData,
+        id: crypto.randomUUID(),
+        order: Date.now(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setPrompts([newPrompt, ...prompts]);
+      toast.success('Prompt saved successfully!');
     }
-  }, [editingPrompt]);
+  };
+
+  const handleDeletePrompt = (id: string) => {
+    playClick();
+    setPrompts(prompts.filter((p) => p.id !== id));
+    toast.success('Prompt deleted');
+  };
+
+  const handleDuplicatePrompt = (prompt: Prompt) => {
+    playSuccess();
+    const duplicated: Prompt = {
+      ...prompt,
+      id: crypto.randomUUID(),
+      title: `${prompt.title} (Copy)`,
+      order: Date.now(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isPinned: false,
+    };
+    setPrompts([duplicated, ...prompts]);
+    toast.success('Prompt duplicated!');
+  };
+
+  const handleTogglePin = (id: string) => {
+    playClick();
+    setPrompts(
+      prompts.map((p) =>
+        p.id === id ? { ...p, isPinned: !p.isPinned } : p
+      )
+    );
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -130,40 +103,19 @@ const Index = () => {
       return;
     }
 
-    // Avoid confusing partial updates while searching
-    if (searchQuery) {
-      toast.info('Clear the search to reorder prompts');
-      return;
+    if (over && active.id !== over.id) {
+      playClick();
+      const oldIndex = prompts.findIndex((p) => p.id === active.id);
+      const newIndex = prompts.findIndex((p) => p.id === over.id);
+
+      const reordered = arrayMove(prompts, oldIndex, newIndex).map((p, idx) => ({
+        ...p,
+        order: idx,
+      }));
+
+      setPrompts(reordered);
+      toast.success('Order updated');
     }
-
-    if (!over || active.id === over.id) return;
-
-    playClick();
-
-    const oldIndex = filteredPrompts.findIndex((p) => p.id === active.id);
-    const newIndex = filteredPrompts.findIndex((p) => p.id === over.id);
-
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    // Keep reordering within the same pin group to avoid confusing jumps
-    const activePinned = filteredPrompts[oldIndex].isPinned;
-    const overPinned = filteredPrompts[newIndex].isPinned;
-    if (activePinned !== overPinned) {
-      toast.info('Reorder within pinned or unpinned groups');
-      return;
-    }
-
-    const reorderedVisible = arrayMove(filteredPrompts, oldIndex, newIndex);
-    const reordered = reorderedVisible.map((p, idx) => ({
-      ...p,
-      order: idx,
-    }));
-
-    reorderPrompts(reordered).catch((error) => {
-      console.error('Error reordering prompts:', error);
-      toast.error('Failed to update order');
-    });
-    toast.success('Order updated');
   };
 
   const handleDragStart = () => {
@@ -172,119 +124,39 @@ const Index = () => {
     }
   };
 
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    prompts.forEach(prompt => {
-      prompt.tags.forEach(tag => tagSet.add(tag));
-    });
-    return Array.from(tagSet).sort((a, b) => a.localeCompare(b));
-  }, [prompts]);
-
   const filteredPrompts = useMemo(() => {
-    // Filter out invalid prompts
-    const validPrompts = prompts.filter(p => p && p.id && p.title && p.content);
-    
     const query = searchQuery.toLowerCase();
-    let filtered = validPrompts.filter((prompt) => {
+    let filtered = prompts.filter((prompt) => {
       if (!query) return true;
       return (
         prompt.title.toLowerCase().includes(query) ||
         prompt.content.toLowerCase().includes(query) ||
-        (prompt.tags && prompt.tags.some((tag) => tag.toLowerCase().includes(query)))
+        prompt.tags.some((tag) => tag.toLowerCase().includes(query))
       );
     });
 
-    // Always prioritize pinned prompts first
-    const pinned = filtered.filter(p => p.isPinned);
-    const unpinned = filtered.filter(p => !p.isPinned);
-
-    switch (sortMode) {
-      case 'date':
-        return [
-          ...pinned.sort((a, b) => 
-            new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
-          ),
-          ...unpinned.sort((a, b) => 
-            new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime()
-          )
-        ];
-      case 'manual':
-      default:
-        return [
-          ...pinned.sort((a, b) => {
-            const aOrder = a.order ?? new Date(a.createdAt).getTime();
-            const bOrder = b.order ?? new Date(b.createdAt).getTime();
-            return aOrder - bOrder;
-          }),
-          ...unpinned.sort((a, b) => {
-            const aOrder = a.order ?? new Date(a.createdAt).getTime();
-            const bOrder = b.order ?? new Date(b.createdAt).getTime();
-            return aOrder - bOrder;
-          })
-        ];
+    // Sort based on mode
+    if (sortMode === 'manual') {
+      filtered = filtered.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        return (a.order || 0) - (b.order || 0);
+      });
+    } else {
+      filtered = filtered.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+      });
     }
+
+    return filtered;
   }, [prompts, searchQuery, sortMode]);
-
-  // Show conflicts dialog when conflicts exist
-  useEffect(() => {
-    if (conflicts.length > 0 && !conflictDialogOpen) {
-      setConflictDialogOpen(true);
-    }
-  }, [conflicts.length, conflictDialogOpen]);
-
-  const handleResolveConflict = async (promptId: string, strategy: 'keep-current' | 'use-revision') => {
-    try {
-      await resolveConflict(promptId, strategy);
-      toast.success('Conflict resolved');
-    } catch (error) {
-      console.error('Error resolving conflict:', error);
-      toast.error('Failed to resolve conflict');
-    }
-  };
-
-  const handleResolveAllConflicts = async (strategy: 'keep-current' | 'use-revision') => {
-    try {
-      for (const conflict of conflicts) {
-        await resolveConflict(conflict.promptId, strategy);
-      }
-      toast.success('All conflicts resolved');
-    } catch (error) {
-      console.error('Error resolving conflicts:', error);
-      toast.error('Failed to resolve all conflicts');
-    }
-  };
-
-  const handleClearLocal = async () => {
-    try {
-      const { clearIndexedDBData } = await import('@/lib/rollback');
-      await clearIndexedDBData();
-      await refresh();
-      toast.success('Local data cleared successfully');
-    } catch (error) {
-      console.error('Error clearing local data:', error);
-      toast.error('Failed to clear local data');
-    }
-  };
-
-  const conflictData = conflicts.map((c) => ({
-    promptId: c.promptId,
-    localVersion: c.clientVersion as unknown as Prompt,
-    serverVersion: c.serverVersion as unknown as Prompt,
-  }));
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Only show sync banner when sync is enabled */}
-      {syncEnabled && (
-        <SyncStatusBanner
-          status={syncStatus}
-          conflictCount={conflicts.length}
-          parkedCount={queueParked}
-          onResolveConflicts={() => setConflictDialogOpen(true)}
-          onRetryParked={retryParked}
-        />
-      )}
-      
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -332,34 +204,21 @@ const Index = () => {
                 {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
               <ExportButton prompts={prompts} onExport={playSuccess} />
-              <SettingsDialog
-                lastSyncTime={Date.now()}
-                queuePending={queuePending}
-                queueParked={queueParked}
-                onManualSync={syncNow}
-                onRetryParked={retryParked}
-                onClearLocal={handleClearLocal}
-                onSyncEnabled={refresh}
-              />
             </div>
           </div>
           <p className="text-muted-foreground">
-            {syncEnabled 
-              ? 'Save, organize, and sync your AI prompts across devices.'
-              : 'Save, organize, and reuse your AI prompts. All data stored locally on this device.'
-            }
+            Save, organize, and reuse your AI prompts. All data persists locally.
           </p>
         </div>
 
         {/* Form */}
-        <div ref={formRef} className="mb-8">
+        <div className="mb-8">
           <PromptForm
             onSave={handleSavePrompt}
             editingPrompt={editingPrompt}
             onCancelEdit={() => setEditingPrompt(null)}
             onGenerateTitle={playSuccess}
             onCancel={playClick}
-            existingTags={allTags}
           />
         </div>
 
@@ -382,20 +241,7 @@ const Index = () => {
         </div>
 
         {/* Prompts Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="p-6 space-y-4">
-                <Skeleton className="h-6 w-3/4" />
-                <Skeleton className="h-20 w-full" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-5 w-16" />
-                  <Skeleton className="h-5 w-16" />
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : filteredPrompts.length > 0 ? (
+        {filteredPrompts.length > 0 ? (
           <DndContext
             sensors={sortMode === 'manual' ? sensors : []}
             collisionDetection={closestCenter}
@@ -411,11 +257,10 @@ const Index = () => {
                   <SortablePromptCard
                     key={prompt.id}
                     prompt={prompt}
-                    onEdit={handleEdit}
+                    onEdit={setEditingPrompt}
                     onDelete={handleDeletePrompt}
+                    onDuplicate={handleDuplicatePrompt}
                     onTogglePin={handleTogglePin}
-                    onPreview={setPreviewPrompt}
-                    isDragEnabled={sortMode === 'manual'}
                   />
                 ))}
               </div>
@@ -437,25 +282,6 @@ const Index = () => {
           </div>
         )}
       </div>
-
-      <PromptPreviewDialog
-        prompt={previewPrompt}
-        open={!!previewPrompt}
-        onOpenChange={(open) => !open && setPreviewPrompt(null)}
-        onEdit={handleEdit}
-        onTogglePin={handleTogglePin}
-      />
-
-      {/* Only show conflict dialog when sync is enabled */}
-      {syncEnabled && (
-        <ConflictResolutionDialog
-          open={conflictDialogOpen}
-          onOpenChange={setConflictDialogOpen}
-          conflicts={conflictData}
-          onResolve={handleResolveConflict}
-          onResolveAll={handleResolveAllConflicts}
-        />
-      )}
     </div>
   );
 };

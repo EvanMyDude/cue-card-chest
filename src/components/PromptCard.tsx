@@ -9,17 +9,11 @@ interface PromptCardProps {
   prompt: Prompt;
   onEdit: (prompt: Prompt) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (prompt: Prompt) => void;
   onTogglePin: (id: string) => void;
-  onPreview?: (prompt: Prompt) => void;
 }
 
-export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }: PromptCardProps) {
-  // Defensive checks for incomplete prompt data
-  if (!prompt || !prompt.id || !prompt.title || !prompt.content) {
-    console.warn('[PromptCard] Incomplete prompt data:', prompt);
-    return null;
-  }
-
+export function PromptCard({ prompt, onEdit, onDelete, onDuplicate, onTogglePin }: PromptCardProps) {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(prompt.content);
@@ -30,43 +24,31 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
   };
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return 'Unknown date';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid date';
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        year: 'numeric'
-      });
-    } catch {
-      return 'Invalid date';
-    }
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   return (
     <Card className={`p-5 transition-all hover:shadow-lg border-border bg-card ${
       prompt.isPinned ? 'ring-2 ring-accent/50' : ''
     }`}>
-      <div 
-        className="flex items-start justify-between mb-3 cursor-pointer" 
-        onClick={() => onPreview?.(prompt)}
-      >
+      <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold mb-1 truncate text-foreground">
             {prompt.title}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {formatDate(prompt.updatedAt || prompt.createdAt)} • {prompt.content?.length || 0} chars
+            {formatDate(prompt.updatedAt)} • {prompt.content.length} chars
           </p>
         </div>
         <Button
           variant="ghost"
           size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin(prompt.id);
-          }}
+          onClick={() => onTogglePin(prompt.id)}
           className="ml-2 shrink-0"
         >
           {prompt.isPinned ? (
@@ -77,19 +59,16 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
         </Button>
       </div>
 
-      <div 
-        className="mb-3 cursor-pointer" 
-        onClick={() => onPreview?.(prompt)}
-      >
+      <div className="mb-3">
         <p className="text-sm text-foreground line-clamp-3 whitespace-pre-wrap">
           {prompt.content}
         </p>
       </div>
 
-      {prompt.tags && prompt.tags.length > 0 && (
+      {prompt.tags.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-4">
-          {[...prompt.tags].sort((a, b) => a.localeCompare(b)).map((tag, idx) => (
-            <Badge key={`${tag}-${idx}`} variant="outline" className="text-xs">
+          {prompt.tags.map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
               {tag}
             </Badge>
           ))}
@@ -100,10 +79,7 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
         <Button
           variant="secondary"
           size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleCopy();
-          }}
+          onClick={handleCopy}
           className="flex-1"
         >
           <Copy className="h-4 w-4 mr-2" />
@@ -112,20 +88,21 @@ export function PromptCard({ prompt, onEdit, onDelete, onTogglePin, onPreview }:
         <Button
           variant="outline"
           size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(prompt);
-          }}
+          onClick={() => onEdit(prompt)}
         >
           <Edit className="h-4 w-4" />
         </Button>
         <Button
           variant="outline"
           size="sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(prompt.id);
-          }}
+          onClick={() => onDuplicate(prompt)}
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onDelete(prompt.id)}
           className="hover:bg-destructive hover:text-destructive-foreground"
         >
           <Trash2 className="h-4 w-4" />
