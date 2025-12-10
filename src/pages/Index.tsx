@@ -11,6 +11,7 @@ import { ConflictResolutionDialog } from '@/components/ConflictResolutionDialog'
 import { usePrompts } from '@/hooks/usePrompts';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useSound } from '@/hooks/useSound';
+import { useSyncContext } from '@/contexts/SyncContext';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,6 +34,7 @@ import {
 } from '@dnd-kit/sortable';
 
 const Index = () => {
+  const { syncEnabled } = useSyncContext();
   const { 
     prompts, 
     loading, 
@@ -272,13 +274,16 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <SyncStatusBanner
-        status={syncStatus}
-        conflictCount={conflicts.length}
-        parkedCount={queueParked}
-        onResolveConflicts={() => setConflictDialogOpen(true)}
-        onRetryParked={retryParked}
-      />
+      {/* Only show sync banner when sync is enabled */}
+      {syncEnabled && (
+        <SyncStatusBanner
+          status={syncStatus}
+          conflictCount={conflicts.length}
+          parkedCount={queueParked}
+          onResolveConflicts={() => setConflictDialogOpen(true)}
+          onRetryParked={retryParked}
+        />
+      )}
       
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
@@ -334,11 +339,15 @@ const Index = () => {
                 onManualSync={syncNow}
                 onRetryParked={retryParked}
                 onClearLocal={handleClearLocal}
+                onSyncEnabled={refresh}
               />
             </div>
           </div>
           <p className="text-muted-foreground">
-            Save, organize, and reuse your AI prompts. All data persists locally.
+            {syncEnabled 
+              ? 'Save, organize, and sync your AI prompts across devices.'
+              : 'Save, organize, and reuse your AI prompts. All data stored locally on this device.'
+            }
           </p>
         </div>
 
@@ -437,13 +446,16 @@ const Index = () => {
         onTogglePin={handleTogglePin}
       />
 
-      <ConflictResolutionDialog
-        open={conflictDialogOpen}
-        onOpenChange={setConflictDialogOpen}
-        conflicts={conflictData}
-        onResolve={handleResolveConflict}
-        onResolveAll={handleResolveAllConflicts}
-      />
+      {/* Only show conflict dialog when sync is enabled */}
+      {syncEnabled && (
+        <ConflictResolutionDialog
+          open={conflictDialogOpen}
+          onOpenChange={setConflictDialogOpen}
+          conflicts={conflictData}
+          onResolve={handleResolveConflict}
+          onResolveAll={handleResolveAllConflicts}
+        />
+      )}
     </div>
   );
 };
