@@ -146,14 +146,17 @@ export function usePrompts(): UsePromptsResult {
    */
   const createPrompt = useCallback(
     async (data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>): Promise<Prompt> => {
-      if (!storage.isReady || !user) {
-        throw new Error('Storage not ready or user not authenticated');
+      if (!storage.isReady) {
+        throw new Error('Storage not ready');
       }
 
-      // Ensure device is registered
-      const deviceId = await ensureDeviceRegistered();
-      if (!deviceId) {
-        throw new Error('Failed to register device');
+      // For sync mode, ensure device is registered
+      let deviceId: string | null = 'local-device';
+      if (syncEnabled && user) {
+        deviceId = await ensureDeviceRegistered();
+        if (!deviceId) {
+          throw new Error('Failed to register device');
+        }
       }
 
       const now = new Date().toISOString();
@@ -162,7 +165,7 @@ export function usePrompts(): UsePromptsResult {
 
       const promptRecord: PromptRecord = {
         id,
-        user_id: user.id,
+        user_id: effectiveUserId,
         device_id: deviceId,
         title: data.title,
         content: data.content,
@@ -179,7 +182,7 @@ export function usePrompts(): UsePromptsResult {
 
       // Handle tags
       if (data.tags.length > 0) {
-        const existingTags = await storage.listTags(user.id);
+        const existingTags = await storage.listTags(effectiveUserId);
         const tagMap = new Map(existingTags.map(t => [t.name, t.id]));
         const tagIds: string[] = [];
 
@@ -189,7 +192,7 @@ export function usePrompts(): UsePromptsResult {
             tagId = crypto.randomUUID();
             await storage.putTag({
               id: tagId,
-              user_id: user.id,
+              user_id: effectiveUserId,
               name: tagName,
               created_at: now,
             });
@@ -200,23 +203,26 @@ export function usePrompts(): UsePromptsResult {
         await storage.setPromptTags(id, tagIds);
       }
 
-      // Queue for sync
-      await syncQueue.queueOperation({
-        operation: 'create',
-        entity_type: 'prompt',
-        entity_id: id,
-        data: {
-          id,
-          title: data.title,
-          content: data.content,
-          tags: data.tags,
-          isPinned: data.isPinned,
-          order: data.order,
-          updatedAt: now,
-        },
-      });
-
-      if (DEV) console.info('[usePrompts] Prompt created and queued for sync:', id);
+      // Queue for sync only if sync is enabled
+      if (syncEnabled && user) {
+        await syncQueue.queueOperation({
+          operation: 'create',
+          entity_type: 'prompt',
+          entity_id: id,
+          data: {
+            id,
+            title: data.title,
+            content: data.content,
+            tags: data.tags,
+            isPinned: data.isPinned,
+            order: data.order,
+            updatedAt: now,
+          },
+        });
+        if (DEV) console.info('[usePrompts] Prompt created and queued for sync:', id);
+      } else {
+        if (DEV) console.info('[usePrompts] Prompt created locally:', id);
+      }
 
       await loadPrompts();
 
@@ -233,7 +239,7 @@ export function usePrompts(): UsePromptsResult {
 
       return newPrompt;
     },
-    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
+    [storage, syncEnabled, user, effectiveUserId, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -244,14 +250,16 @@ export function usePrompts(): UsePromptsResult {
       id: string,
       data: Partial<Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>>
     ): Promise<Prompt> => {
-      if (!storage.isReady || !user) {
-        throw new Error('Storage not ready or user not authenticated');
+      if (!storage.isReady) {
+        throw new Error('Storage not ready');
       }
 
-      // Ensure device is registered
-      const deviceId = await ensureDeviceRegistered();
-      if (!deviceId) {
-        throw new Error('Failed to register device');
+      // For sync mode, ensure device is registered
+      if (syncEnabled && user) {
+        const deviceId = await ensureDeviceRegistered();
+        if (!deviceId) {
+          throw new Error('Failed to register device');
+        }
       }
 
       const existing = await storage.getPromptById(id);
@@ -265,7 +273,7 @@ export function usePrompts(): UsePromptsResult {
       const checksum = await computeChecksum(title, content);
 
       // Fetch the PromptRecord from IndexedDB
-      const existingPromptRecords = await storage.listPrompts(user.id);
+      const existingPromptRecords = await storage.listPrompts(effectiveUserId);
       const matchingPrompt = existingPromptRecords.find(p => p.id === id);
       
       // We need to get the raw PromptRecord for version info
@@ -299,7 +307,7 @@ export function usePrompts(): UsePromptsResult {
 
       // Handle tags if provided
       if (data.tags !== undefined) {
-        const existingTags = await storage.listTags(user.id);
+        const existingTags = await storage.listTags(effectiveUserId);
         const tagMap = new Map(existingTags.map(t => [t.name, t.id]));
         const tagIds: string[] = [];
 
@@ -309,7 +317,7 @@ export function usePrompts(): UsePromptsResult {
             tagId = crypto.randomUUID();
             await storage.putTag({
               id: tagId,
-              user_id: user.id,
+              user_id: effectiveUserId,
               name: tagName,
               created_at: now,
             });
@@ -320,21 +328,23 @@ export function usePrompts(): UsePromptsResult {
         await storage.setPromptTags(id, tagIds);
       }
 
-      // Queue for sync
-      await syncQueue.queueOperation({
-        operation: 'update',
-        entity_type: 'prompt',
-        entity_id: id,
-        data: {
-          id,
-          title,
-          content,
-          tags: data.tags ?? existing.tags,
-          isPinned: data.isPinned ?? existing.isPinned,
-          order: data.order ?? existing.order,
-          updatedAt: now,
-        },
-      });
+      // Queue for sync only if sync is enabled
+      if (syncEnabled && user) {
+        await syncQueue.queueOperation({
+          operation: 'update',
+          entity_type: 'prompt',
+          entity_id: id,
+          data: {
+            id,
+            title,
+            content,
+            tags: data.tags ?? existing.tags,
+            isPinned: data.isPinned ?? existing.isPinned,
+            order: data.order ?? existing.order,
+            updatedAt: now,
+          },
+        });
+      }
 
       await loadPrompts();
 
@@ -347,7 +357,7 @@ export function usePrompts(): UsePromptsResult {
         updatedAt: now,
       };
     },
-    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
+    [storage, syncEnabled, user, effectiveUserId, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -355,29 +365,33 @@ export function usePrompts(): UsePromptsResult {
    */
   const deletePrompt = useCallback(
     async (id: string): Promise<void> => {
-      if (!storage.isReady || !user) {
-        throw new Error('Storage not ready or user not authenticated');
+      if (!storage.isReady) {
+        throw new Error('Storage not ready');
       }
 
-      // Ensure device is registered
-      const deviceId = await ensureDeviceRegistered();
-      if (!deviceId) {
-        throw new Error('Failed to register device');
+      // For sync mode, ensure device is registered
+      if (syncEnabled && user) {
+        const deviceId = await ensureDeviceRegistered();
+        if (!deviceId) {
+          throw new Error('Failed to register device');
+        }
       }
 
       await storage.softDeletePrompt(id);
 
-      // Queue for sync
-      await syncQueue.queueOperation({
-        operation: 'delete',
-        entity_type: 'prompt',
-        entity_id: id,
-        data: { id },
-      });
+      // Queue for sync only if sync is enabled
+      if (syncEnabled && user) {
+        await syncQueue.queueOperation({
+          operation: 'delete',
+          entity_type: 'prompt',
+          entity_id: id,
+          data: { id },
+        });
+      }
 
       await loadPrompts();
     },
-    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
+    [storage, syncEnabled, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
@@ -385,14 +399,16 @@ export function usePrompts(): UsePromptsResult {
    */
   const reorderPrompts = useCallback(
     async (reorderedPrompts: Prompt[]): Promise<void> => {
-      if (!storage.isReady || !user) {
-        throw new Error('Storage not ready or user not authenticated');
+      if (!storage.isReady) {
+        throw new Error('Storage not ready');
       }
 
-      // Ensure device is registered
-      const deviceId = await ensureDeviceRegistered();
-      if (!deviceId) {
-        throw new Error('Failed to register device');
+      // For sync mode, ensure device is registered
+      if (syncEnabled && user) {
+        const deviceId = await ensureDeviceRegistered();
+        if (!deviceId) {
+          throw new Error('Failed to register device');
+        }
       }
 
       const now = new Date().toISOString();
@@ -414,27 +430,29 @@ export function usePrompts(): UsePromptsResult {
 
       await storage.bulkPutPrompts(updates);
 
-      // Queue each update
-      for (const update of updates) {
-        await syncQueue.queueOperation({
-          operation: 'update',
-          entity_type: 'prompt',
-          entity_id: update.id,
-          data: {
-            id: update.id,
-            title: update.title,
-            content: update.content,
-            tags: [], // Tags not changed during reorder
-            isPinned: update.isPinned,
-            order: update.order,
-            updatedAt: update.updatedAt,
-          },
-        });
+      // Queue each update only if sync is enabled
+      if (syncEnabled && user) {
+        for (const update of updates) {
+          await syncQueue.queueOperation({
+            operation: 'update',
+            entity_type: 'prompt',
+            entity_id: update.id,
+            data: {
+              id: update.id,
+              title: update.title,
+              content: update.content,
+              tags: [], // Tags not changed during reorder
+              isPinned: update.isPinned,
+              order: update.order,
+              updatedAt: update.updatedAt,
+            },
+          });
+        }
       }
 
       await loadPrompts();
     },
-    [storage, user, syncQueue, loadPrompts, ensureDeviceRegistered]
+    [storage, syncEnabled, user, syncQueue, loadPrompts, ensureDeviceRegistered]
   );
 
   /**
