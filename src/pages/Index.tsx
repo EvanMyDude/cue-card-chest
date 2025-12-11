@@ -40,7 +40,7 @@ import {
 const Index = () => {
   // Auth & Sync state
   const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
-  const { syncEnabled, setSyncEnabled } = useSyncEnabled();
+  const { syncEnabled, hasMigrated, setHasMigrated } = useSyncEnabled();
   const { syncStatus, pendingCount, lastSyncAt } = useSyncQueue();
   
   // Use the unified prompts hook
@@ -50,7 +50,8 @@ const Index = () => {
     createPrompt, 
     updatePrompt, 
     deletePrompt,
-    refreshPrompts 
+    refreshPrompts,
+    localPrompts,
   } = usePrompts();
 
   // UI state
@@ -74,13 +75,13 @@ const Index = () => {
     })
   );
 
-  // Handle auth state changes
+  // Smart migration trigger: only open wizard if local prompts exist and not yet migrated
   useEffect(() => {
-    if (isAuthenticated && syncEnabled && !migrationWizardOpen) {
-      // User just authenticated, refresh prompts from cloud
-      refreshPrompts();
+    if (isAuthenticated && !hasMigrated && localPrompts.length > 0 && !authLoading) {
+      // User just authenticated and has local prompts to migrate
+      setMigrationWizardOpen(true);
     }
-  }, [isAuthenticated, syncEnabled]);
+  }, [isAuthenticated, hasMigrated, localPrompts.length, authLoading]);
 
   const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
@@ -187,7 +188,7 @@ const Index = () => {
   };
 
   const handleMigrationComplete = (mergedPrompts: Prompt[], newConflicts: MergeConflict[]) => {
-    setSyncEnabled(true);
+    setHasMigrated(true); // Mark this device as migrated
     setMigrationWizardOpen(false);
     
     if (newConflicts.length > 0) {
@@ -201,7 +202,6 @@ const Index = () => {
   };
 
   const handleDisconnectSync = async () => {
-    setSyncEnabled(false);
     await signOut();
     toast.success('Sync disconnected. Your prompts are now stored locally only.');
   };
@@ -233,7 +233,6 @@ const Index = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    setSyncEnabled(false);
     toast.success('Signed out successfully');
   };
 
@@ -494,7 +493,7 @@ const Index = () => {
       <MigrationWizard
         open={migrationWizardOpen}
         onOpenChange={setMigrationWizardOpen}
-        localPrompts={prompts}
+        localPrompts={localPrompts}
         onMigrationComplete={handleMigrationComplete}
       />
 
