@@ -1,38 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from './useAuth';
 
-const MIGRATION_COMPLETED_KEY = 'promptLibrary_hasMigrated';
+const SYNC_ENABLED_KEY = 'promptLibrary_syncEnabled';
 
 interface UseSyncEnabledReturn {
   syncEnabled: boolean;
-  hasMigrated: boolean;
-  setHasMigrated: (migrated: boolean) => void;
+  setSyncEnabled: (enabled: boolean) => void;
 }
 
 export function useSyncEnabled(): UseSyncEnabledReturn {
-  const { isAuthenticated } = useAuth();
-  
-  const [hasMigrated, setHasMigratedState] = useState<boolean>(() => {
+  const [syncEnabled, setSyncEnabledState] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem(MIGRATION_COMPLETED_KEY);
+    const stored = localStorage.getItem(SYNC_ENABLED_KEY);
     return stored === 'true';
   });
 
   useEffect(() => {
-    localStorage.setItem(MIGRATION_COMPLETED_KEY, String(hasMigrated));
-  }, [hasMigrated]);
+    localStorage.setItem(SYNC_ENABLED_KEY, String(syncEnabled));
+  }, [syncEnabled]);
 
-  const setHasMigrated = useCallback((migrated: boolean) => {
-    setHasMigratedState(migrated);
+  const setSyncEnabled = useCallback((enabled: boolean) => {
+    setSyncEnabledState(enabled);
   }, []);
-
-  // syncEnabled is true if user is authenticated
-  // OR if they've previously completed migration on this device (for offline access)
-  const syncEnabled = isAuthenticated || hasMigrated;
 
   return {
     syncEnabled,
-    hasMigrated,
-    setHasMigrated,
+    setSyncEnabled,
   };
 }

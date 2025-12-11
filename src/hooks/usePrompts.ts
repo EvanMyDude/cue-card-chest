@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Prompt } from '@/types/prompt';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useSyncEnabled } from './useSyncEnabled';
 import { useDeviceId } from './useDeviceId';
-import { useSyncQueue } from './useSyncQueue';
+import { useSyncQueue, SyncAction } from './useSyncQueue';
 
 const LOCAL_STORAGE_KEY = 'prompts';
 
@@ -17,30 +18,29 @@ interface UsePromptsReturn {
   refreshPrompts: () => Promise<void>;
 }
 
-// Export for use by migration wizard
-export function getLocalPrompts(): Prompt[] {
+function getLocalPrompts(): Prompt[] {
   if (typeof window === 'undefined') return [];
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
   return stored ? JSON.parse(stored) : [];
 }
 
-export function setLocalPrompts(prompts: Prompt[]): void {
+function setLocalPrompts(prompts: Prompt[]): void {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(prompts));
 }
 
 export function usePrompts(): UsePromptsReturn {
   const { user, isAuthenticated } = useAuth();
+  const { syncEnabled } = useSyncEnabled();
   const { deviceId } = useDeviceId();
-  const { queueChange } = useSyncQueue();
+  const { queueChange, syncStatus } = useSyncQueue();
 
   const [prompts, setPrompts] = useState<Prompt[]>(() => getLocalPrompts());
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch prompts from Supabase when user is authenticated
+  // Fetch prompts from Supabase when sync is enabled and user is authenticated
   const fetchRemotePrompts = useCallback(async () => {
-    // Key change: Only require isAuthenticated, not syncEnabled
-    if (!isAuthenticated || !user) return;
+    if (!syncEnabled || !isAuthenticated || !user) return;
 
     setIsLoading(true);
     setError(null);
@@ -78,26 +78,25 @@ export function usePrompts(): UsePromptsReturn {
       }));
 
       setPrompts(remotePrompts);
-      setLocalPrompts(remotePrompts); // Cache locally for offline access
+      setLocalPrompts(remotePrompts); // Cache locally
     } catch (e) {
       console.error('Error fetching prompts:', e);
       setError('Failed to load prompts from cloud');
-      // Fall back to local cache
+      // Fall back to local
       setPrompts(getLocalPrompts());
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [syncEnabled, isAuthenticated, user]);
 
-  // Load prompts on mount and when auth state changes
+  // Load prompts on mount and when sync state changes
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (syncEnabled && isAuthenticated) {
       fetchRemotePrompts();
     } else {
-      // Not authenticated: use local storage as source of truth
       setPrompts(getLocalPrompts());
     }
-  }, [isAuthenticated, user, fetchRemotePrompts]);
+  }, [syncEnabled, isAuthenticated, fetchRemotePrompts]);
 
   const createPrompt = useCallback(async (
     data: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>
@@ -115,9 +114,10 @@ export function usePrompts(): UsePromptsReturn {
     setPrompts(updated);
     setLocalPrompts(updated);
 
-    // Sync to cloud if authenticated
-    if (isAuthenticated && user) {
+    // Sync to cloud if enabled
+    if (syncEnabled && isAuthenticated && user) {
       try {
+        // Checksum is computed automatically by database trigger
         const { error: insertError } = await supabase.from('prompts').insert({
           id: newPrompt.id,
           user_id: user.id,
@@ -134,6 +134,7 @@ export function usePrompts(): UsePromptsReturn {
         // Handle tags
         if (newPrompt.tags.length > 0) {
           for (const tagName of newPrompt.tags) {
+            // Get or create tag
             let { data: existingTag } = await supabase
               .from('tags')
               .select('id')
@@ -165,7 +166,7 @@ export function usePrompts(): UsePromptsReturn {
     }
 
     return newPrompt;
-  }, [prompts, isAuthenticated, user, deviceId, queueChange]);
+  }, [prompts, syncEnabled, isAuthenticated, user, deviceId, queueChange]);
 
   const updatePrompt = useCallback(async (id: string, data: Partial<Prompt>): Promise<void> => {
     const now = new Date().toISOString();
@@ -179,7 +180,7 @@ export function usePrompts(): UsePromptsReturn {
     const updatedPrompt = updated.find(p => p.id === id);
     if (!updatedPrompt) return;
 
-    if (isAuthenticated && user) {
+    if (syncEnabled && isAuthenticated && user) {
       try {
         const { error: updateError } = await supabase.from('prompts')
           .update({
@@ -198,7 +199,7 @@ export function usePrompts(): UsePromptsReturn {
         queueChange('update', updatedPrompt);
       }
     }
-  }, [prompts, isAuthenticated, user, deviceId, queueChange]);
+  }, [prompts, syncEnabled, isAuthenticated, user, deviceId, queueChange]);
 
   const deletePrompt = useCallback(async (id: string): Promise<void> => {
     const promptToDelete = prompts.find(p => p.id === id);
@@ -206,7 +207,7 @@ export function usePrompts(): UsePromptsReturn {
     setPrompts(updated);
     setLocalPrompts(updated);
 
-    if (isAuthenticated && user && promptToDelete) {
+    if (syncEnabled && isAuthenticated && user && promptToDelete) {
       try {
         const { error: deleteError } = await supabase.from('prompts')
           .delete()
@@ -219,15 +220,15 @@ export function usePrompts(): UsePromptsReturn {
         queueChange('delete', promptToDelete);
       }
     }
-  }, [prompts, isAuthenticated, user, queueChange]);
+  }, [prompts, syncEnabled, isAuthenticated, user, queueChange]);
 
   const refreshPrompts = useCallback(async () => {
-    if (isAuthenticated && user) {
+    if (syncEnabled && isAuthenticated) {
       await fetchRemotePrompts();
     } else {
       setPrompts(getLocalPrompts());
     }
-  }, [isAuthenticated, user, fetchRemotePrompts]);
+  }, [syncEnabled, isAuthenticated, fetchRemotePrompts]);
 
   return {
     prompts,

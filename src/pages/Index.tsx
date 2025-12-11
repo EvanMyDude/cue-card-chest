@@ -15,7 +15,7 @@ import { useSound } from '@/hooks/useSound';
 import { useAuth } from '@/hooks/useAuth';
 import { useSyncEnabled } from '@/hooks/useSyncEnabled';
 import { useSyncQueue } from '@/hooks/useSyncQueue';
-import { usePrompts, getLocalPrompts } from '@/hooks/usePrompts';
+import { usePrompts } from '@/hooks/usePrompts';
 import { MergeConflict } from '@/utils/mergePrompts';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ import {
 const Index = () => {
   // Auth & Sync state
   const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
-  const { syncEnabled, hasMigrated, setHasMigrated } = useSyncEnabled();
+  const { syncEnabled, setSyncEnabled } = useSyncEnabled();
   const { syncStatus, pendingCount, lastSyncAt } = useSyncQueue();
   
   // Use the unified prompts hook
@@ -66,11 +66,6 @@ const Index = () => {
   const [migrationWizardOpen, setMigrationWizardOpen] = useState(false);
   const [conflicts, setConflicts] = useState<MergeConflict[]>([]);
   const [activeConflict, setActiveConflict] = useState<MergeConflict | null>(null);
-  
-  // Track if we've handled the initial auth state
-  const [hasHandledAuth, setHasHandledAuth] = useState(false);
-  // Store local prompts at the moment of authentication for migration
-  const [localPromptsForMigration, setLocalPromptsForMigration] = useState<Prompt[]>([]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -79,27 +74,13 @@ const Index = () => {
     })
   );
 
-  // Handle auth state changes - smart migration trigger
+  // Handle auth state changes
   useEffect(() => {
-    if (authLoading || hasHandledAuth) return;
-    
-    if (isAuthenticated && user) {
-      // User just authenticated or returned authenticated
-      // Check if this device has local prompts that need migration
-      const localPrompts = getLocalPrompts();
-      
-      if (!hasMigrated && localPrompts.length > 0) {
-        // First time auth on this device with local prompts -> run migration
-        setLocalPromptsForMigration(localPrompts);
-        setMigrationWizardOpen(true);
-      } else {
-        // Either: already migrated OR no local prompts
-        // Just mark migration as complete (returning user on new device)
-        setHasMigrated(true);
-      }
-      setHasHandledAuth(true);
+    if (isAuthenticated && syncEnabled && !migrationWizardOpen) {
+      // User just authenticated, refresh prompts from cloud
+      refreshPrompts();
     }
-  }, [isAuthenticated, user, authLoading, hasMigrated, hasHandledAuth, setHasMigrated]);
+  }, [isAuthenticated, syncEnabled]);
 
   const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
@@ -191,40 +172,23 @@ const Index = () => {
   // Sync handlers
   const handleSyncClick = () => {
     if (isAuthenticated) {
-      // Already authenticated - check if we need migration
-      const localPrompts = getLocalPrompts();
-      if (localPrompts.length > 0 && !hasMigrated) {
-        setLocalPromptsForMigration(localPrompts);
-        setMigrationWizardOpen(true);
-      } else {
-        toast.info('Your prompts are already synced!');
-      }
+      // Already authenticated, open migration wizard
+      setMigrationWizardOpen(true);
     } else {
-      // Need to authenticate first - store local prompts for later
-      setLocalPromptsForMigration(getLocalPrompts());
+      // Need to authenticate first
       setAuthModalOpen(true);
     }
   };
 
   const handleAuthSuccess = () => {
     setAuthModalOpen(false);
-    
-    // Check if we have local prompts to migrate
-    if (localPromptsForMigration.length > 0) {
-      // Has local prompts -> open migration wizard
-      setMigrationWizardOpen(true);
-    } else {
-      // No local prompts -> just mark as migrated and refresh
-      setHasMigrated(true);
-      refreshPrompts();
-      toast.success('Sync enabled! Your prompts will sync across devices.');
-    }
+    // Open migration wizard after successful auth
+    setMigrationWizardOpen(true);
   };
 
   const handleMigrationComplete = (mergedPrompts: Prompt[], newConflicts: MergeConflict[]) => {
-    setHasMigrated(true);
+    setSyncEnabled(true);
     setMigrationWizardOpen(false);
-    setLocalPromptsForMigration([]);
     
     if (newConflicts.length > 0) {
       setConflicts(newConflicts);
@@ -237,8 +201,7 @@ const Index = () => {
   };
 
   const handleDisconnectSync = async () => {
-    setHasMigrated(false);
-    setHasHandledAuth(false);
+    setSyncEnabled(false);
     await signOut();
     toast.success('Sync disconnected. Your prompts are now stored locally only.');
   };
@@ -270,8 +233,7 @@ const Index = () => {
 
   const handleSignOut = async () => {
     await signOut();
-    setHasMigrated(false);
-    setHasHandledAuth(false);
+    setSyncEnabled(false);
     toast.success('Signed out successfully');
   };
 
@@ -336,8 +298,8 @@ const Index = () => {
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
             <div className="flex items-center gap-2">
-              {/* Sync indicator (show when authenticated) */}
-              {isAuthenticated && (
+              {/* Sync indicator (show when sync is enabled) */}
+              {syncEnabled && isAuthenticated && (
                 <SyncIndicator 
                   status={syncStatus} 
                   pendingCount={pendingCount} 
@@ -345,8 +307,8 @@ const Index = () => {
                 />
               )}
               
-              {/* Sync CTA (show when not authenticated) */}
-              {!isAuthenticated && (
+              {/* Sync CTA (show when sync is not enabled) */}
+              {!syncEnabled && (
                 <SyncCTA onClick={handleSyncClick} />
               )}
 
@@ -397,7 +359,7 @@ const Index = () => {
                 prompts={prompts}
                 onImport={handleImportPrompts}
                 onDisconnectSync={handleDisconnectSync}
-                syncEnabled={isAuthenticated}
+                syncEnabled={syncEnabled}
               />
 
               {/* Sign out button (show when authenticated) */}
@@ -414,7 +376,7 @@ const Index = () => {
             </div>
           </div>
           <p className="text-muted-foreground">
-            {isAuthenticated
+            {syncEnabled && isAuthenticated
               ? 'Your prompts sync automatically across all your devices.'
               : 'Save, organize, and reuse your AI prompts. All data persists locally.'}
           </p>
@@ -532,7 +494,7 @@ const Index = () => {
       <MigrationWizard
         open={migrationWizardOpen}
         onOpenChange={setMigrationWizardOpen}
-        localPrompts={localPromptsForMigration.length > 0 ? localPromptsForMigration : prompts}
+        localPrompts={prompts}
         onMigrationComplete={handleMigrationComplete}
       />
 
