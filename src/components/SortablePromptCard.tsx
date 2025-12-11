@@ -1,7 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { PromptCard } from './PromptCard';
-import { ConflictBadge } from './ConflictBadge';
 import type { Prompt } from '@/types/prompt';
 
 interface SortablePromptCardProps {
@@ -11,8 +10,6 @@ interface SortablePromptCardProps {
   onTogglePin: (id: string) => void;
   onPreview?: (prompt: Prompt) => void;
   isDragEnabled?: boolean;
-  hasConflict?: boolean;
-  onResolveConflict?: () => void;
 }
 
 export const SortablePromptCard = ({
@@ -22,8 +19,6 @@ export const SortablePromptCard = ({
   onTogglePin,
   onPreview,
   isDragEnabled = true,
-  hasConflict = false,
-  onResolveConflict,
 }: SortablePromptCardProps) => {
   const {
     attributes,
@@ -61,11 +56,6 @@ export const SortablePromptCard = ({
           </svg>
         </div>
       </div>
-      {hasConflict && onResolveConflict && (
-        <div className="absolute top-2 right-2 z-10">
-          <ConflictBadge onClick={onResolveConflict} />
-        </div>
-      )}
       <div className="group">
         <PromptCard
           prompt={prompt}

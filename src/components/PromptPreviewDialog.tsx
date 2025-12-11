@@ -1,18 +1,7 @@
-import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Copy, Edit, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Copy, Edit, Pin, PinOff } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
 
@@ -22,7 +11,6 @@ interface PromptPreviewDialogProps {
   onOpenChange: (open: boolean) => void;
   onEdit: (prompt: Prompt) => void;
   onTogglePin: (id: string) => void;
-  onDelete: (id: string) => void;
 }
 
 export function PromptPreviewDialog({ 
@@ -30,18 +18,9 @@ export function PromptPreviewDialog({
   open, 
   onOpenChange,
   onEdit,
-  onTogglePin,
-  onDelete
+  onTogglePin
 }: PromptPreviewDialogProps) {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
   if (!prompt) return null;
-
-  const handleDelete = () => {
-    onDelete(prompt.id);
-    setShowDeleteConfirm(false);
-    onOpenChange(false);
-  };
 
   const handleCopy = async () => {
     try {
@@ -79,28 +58,18 @@ export function PromptPreviewDialog({
                 Updated {formatDate(prompt.updatedAt)} • {prompt.content.length} characters
               </p>
             </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="shrink-0 hover:bg-destructive hover:text-destructive-foreground"
-              >
-                <Trash2 className="h-5 w-5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onTogglePin(prompt.id)}
-                className="shrink-0"
-              >
-                {prompt.isPinned ? (
-                  <PinOff className="h-5 w-5 text-accent" />
-                ) : (
-                  <Pin className="h-5 w-5" />
-                )}
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onTogglePin(prompt.id)}
+              className="shrink-0"
+            >
+              {prompt.isPinned ? (
+                <PinOff className="h-5 w-5 text-accent" />
+              ) : (
+                <Pin className="h-5 w-5" />
+              )}
+            </Button>
           </div>
         </DialogHeader>
 
@@ -140,26 +109,6 @@ export function PromptPreviewDialog({
           </div>
         </div>
       </DialogContent>
-
-      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Prompt</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this prompt?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Dialog>
   );
 }
