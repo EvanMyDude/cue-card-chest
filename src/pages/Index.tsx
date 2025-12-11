@@ -15,7 +15,7 @@ import { useSound } from '@/hooks/useSound';
 import { useAuth } from '@/hooks/useAuth';
 import { useSyncEnabled } from '@/hooks/useSyncEnabled';
 import { useSyncQueue } from '@/hooks/useSyncQueue';
-import { usePrompts } from '@/hooks/usePrompts';
+import { usePrompts, hasPreAuthSnapshot } from '@/hooks/usePrompts';
 import { MergeConflict } from '@/utils/mergePrompts';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,14 @@ import {
 const Index = () => {
   // Auth & Sync state
   const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
-  const { syncEnabled, hasMigrated, setHasMigrated } = useSyncEnabled();
+  const { 
+    syncEnabled, 
+    hasMigrated, 
+    setHasMigrated, 
+    migrationDismissed, 
+    setMigrationDismissed,
+    clearMigrationState 
+  } = useSyncEnabled();
   const { syncStatus, pendingCount, lastSyncAt } = useSyncQueue();
   
   // Use the unified prompts hook
@@ -75,13 +82,22 @@ const Index = () => {
     })
   );
 
-  // Smart migration trigger: only open wizard if local prompts exist and not yet migrated
+  // Smart migration trigger: open wizard if there's a snapshot to migrate
+  // This handles the case where user returns from OAuth redirect
   useEffect(() => {
-    if (isAuthenticated && !hasMigrated && localPrompts.length > 0 && !authLoading) {
-      // User just authenticated and has local prompts to migrate
-      setMigrationWizardOpen(true);
+    if (authLoading) return; // Wait for auth to settle
+    
+    if (isAuthenticated && !hasMigrated && !migrationDismissed) {
+      // Check if there's a snapshot or local prompts to migrate
+      const hasSnapshot = hasPreAuthSnapshot();
+      const hasLocalPrompts = localPrompts.length > 0;
+      
+      if (hasSnapshot || hasLocalPrompts) {
+        console.log('[Index] Opening migration wizard - hasSnapshot:', hasSnapshot, 'hasLocalPrompts:', hasLocalPrompts);
+        setMigrationWizardOpen(true);
+      }
     }
-  }, [isAuthenticated, hasMigrated, localPrompts.length, authLoading]);
+  }, [isAuthenticated, hasMigrated, migrationDismissed, localPrompts.length, authLoading]);
 
   const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
@@ -188,6 +204,7 @@ const Index = () => {
   };
 
   const handleMigrationComplete = (mergedPrompts: Prompt[], newConflicts: MergeConflict[]) => {
+    console.log('[Index] Migration complete');
     setHasMigrated(true); // Mark this device as migrated
     setMigrationWizardOpen(false);
     
@@ -201,8 +218,16 @@ const Index = () => {
     refreshPrompts();
   };
 
+  const handleMigrationDismiss = () => {
+    console.log('[Index] Migration dismissed by user');
+    setMigrationDismissed(true);
+    // Now usePrompts.fetchRemotePrompts will be allowed to run
+    refreshPrompts();
+  };
+
   const handleDisconnectSync = async () => {
     await signOut();
+    clearMigrationState(); // Reset migration flags for next login
     toast.success('Sync disconnected. Your prompts are now stored locally only.');
   };
 
@@ -233,6 +258,7 @@ const Index = () => {
 
   const handleSignOut = async () => {
     await signOut();
+    clearMigrationState(); // Reset migration flags for next login
     toast.success('Signed out successfully');
   };
 
@@ -499,14 +525,17 @@ const Index = () => {
         onOpenChange={setMigrationWizardOpen}
         localPrompts={localPrompts}
         onMigrationComplete={handleMigrationComplete}
+        onDismiss={handleMigrationDismiss}
       />
 
-      <ConflictResolver
-        conflict={activeConflict}
-        open={!!activeConflict}
-        onOpenChange={(open) => !open && setActiveConflict(null)}
-        onResolve={handleResolveConflict}
-      />
+      {activeConflict && (
+        <ConflictResolver
+          conflict={activeConflict}
+          open={!!activeConflict}
+          onOpenChange={(open) => !open && setActiveConflict(null)}
+          onResolve={handleResolveConflict}
+        />
+      )}
     </div>
   );
 };
