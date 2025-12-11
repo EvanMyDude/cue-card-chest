@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Settings, Download, Upload, LogOut, Monitor } from 'lucide-react';
+import { Settings, Download, Upload, LogOut, Monitor, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportPromptsToJSON, importPromptsFromJSON, mergeImportedPrompts } from '@/utils/jsonExport';
 import type { Prompt } from '@/types/prompt';
@@ -17,6 +17,7 @@ interface SyncSettingsDropdownProps {
   prompts: Prompt[];
   onImport: (prompts: Prompt[]) => void;
   onSignOut: () => void;
+  onManualSync?: () => Promise<void>;
   deviceName: string;
   userEmail?: string;
 }
@@ -25,10 +26,25 @@ export function SyncSettingsDropdown({
   prompts,
   onImport,
   onSignOut,
+  onManualSync,
   deviceName,
   userEmail,
 }: SyncSettingsDropdownProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    if (!onManualSync) return;
+    setIsSyncing(true);
+    try {
+      await onManualSync();
+      toast.success('Sync complete');
+    } catch (error) {
+      toast.error('Sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleExport = () => {
     exportPromptsToJSON(prompts);
@@ -99,6 +115,13 @@ export function SyncSettingsDropdown({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
             </>
+          )}
+
+          {userEmail && onManualSync && (
+            <DropdownMenuItem onClick={handleManualSync} disabled={isSyncing}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync Now'}
+            </DropdownMenuItem>
           )}
 
           <DropdownMenuItem onClick={handleExport}>
