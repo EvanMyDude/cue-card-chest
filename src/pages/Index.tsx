@@ -482,6 +482,10 @@ const Index = () => {
         onOpenChange={(open) => !open && setPreviewPrompt(null)}
         onEdit={handleEdit}
         onTogglePin={handleTogglePin}
+        onDelete={(id) => {
+          handleDeletePrompt(id);
+          setPreviewPrompt(null);
+        }}
       />
 
       <AuthModal
