@@ -98,6 +98,14 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
     }
   }, [syncEnabled, userId, fetchRemotePrompts]);
 
+  // Helper to ensure order_index is a valid integer (max 2147483647)
+  const safeOrderIndex = (order: number | undefined): number => {
+    if (typeof order !== 'number' || order > 2147483647 || order < 0) {
+      return 0;
+    }
+    return Math.floor(order);
+  };
+
   // Create prompt
   const createPrompt = useCallback(async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     const newPrompt: Prompt = {
@@ -119,7 +127,7 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
           title: newPrompt.title,
           content: newPrompt.content,
           is_pinned: newPrompt.isPinned,
-          order_index: newPrompt.order,
+          order_index: safeOrderIndex(newPrompt.order),
           checksum: '', // Will be computed by trigger
         });
 
@@ -158,7 +166,7 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
             title: updates.title,
             content: updates.content,
             is_pinned: updates.isPinned,
-            order_index: updates.order,
+            order_index: updates.order !== undefined ? safeOrderIndex(updates.order) : undefined,
             device_id: deviceId,
           })
           .eq('id', id)
@@ -256,7 +264,7 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
           title: prompt.title,
           content: prompt.content,
           is_pinned: prompt.isPinned,
-          order_index: prompt.order,
+          order_index: safeOrderIndex(prompt.order),
           checksum: '',
         });
 
