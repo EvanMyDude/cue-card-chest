@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail, Loader2, CheckCircle2, AlertCircle, Chrome } from 'lucide-react';
+import { Mail, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
+import { capturePreAuthSnapshot } from '@/hooks/usePrompts';
 
 interface AuthModalProps {
   open: boolean;
@@ -47,6 +48,12 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
     setAuthState('sending');
     setErrorMessage('');
 
+    // CRITICAL: Capture snapshot BEFORE initiating magic link
+    // User will click the email link later, causing a page reload
+    // This protects local prompts from being overwritten
+    capturePreAuthSnapshot();
+    console.log('[AuthModal] Captured pre-auth snapshot before magic link');
+
     const { error } = await signInWithMagicLink(email);
 
     if (error) {
@@ -72,6 +79,11 @@ export function AuthModal({ open, onOpenChange, onSuccess }: AuthModalProps) {
   const handleGoogleSignIn = async () => {
     setAuthState('google-loading');
     setErrorMessage('');
+
+    // CRITICAL: Capture snapshot BEFORE OAuth redirect
+    // The page will reload after Google auth - this protects local prompts
+    capturePreAuthSnapshot();
+    console.log('[AuthModal] Captured pre-auth snapshot before Google OAuth');
 
     const { error } = await signInWithGoogle();
 

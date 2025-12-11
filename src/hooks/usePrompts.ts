@@ -4,8 +4,50 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useDeviceId } from './useDeviceId';
 import { useSyncQueue } from './useSyncQueue';
+import { useSyncEnabled } from './useSyncEnabled';
 
 const LOCAL_STORAGE_KEY = 'prompts';
+const MIGRATION_SNAPSHOT_KEY = 'prompts_migration_snapshot';
+
+// ============= SNAPSHOT HELPERS (exported for use in AuthModal) =============
+
+/**
+ * Capture a snapshot of local prompts BEFORE OAuth redirect.
+ * This protects the data from being overwritten when the page reloads.
+ */
+export function capturePreAuthSnapshot(): void {
+  const current = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (current) {
+    const prompts = JSON.parse(current);
+    console.log('[Migration] Capturing pre-auth snapshot:', prompts.length, 'prompts');
+    localStorage.setItem(MIGRATION_SNAPSHOT_KEY, current);
+  }
+}
+
+/**
+ * Get the protected snapshot of prompts captured before auth.
+ */
+export function getPreAuthSnapshot(): Prompt[] {
+  const snapshot = localStorage.getItem(MIGRATION_SNAPSHOT_KEY);
+  return snapshot ? JSON.parse(snapshot) : [];
+}
+
+/**
+ * Clear the pre-auth snapshot after successful migration or dismissal.
+ */
+export function clearPreAuthSnapshot(): void {
+  console.log('[Migration] Clearing pre-auth snapshot');
+  localStorage.removeItem(MIGRATION_SNAPSHOT_KEY);
+}
+
+/**
+ * Check if a pre-auth snapshot exists.
+ */
+export function hasPreAuthSnapshot(): boolean {
+  return localStorage.getItem(MIGRATION_SNAPSHOT_KEY) !== null;
+}
+
+// ============= LOCAL STORAGE HELPERS =============
 
 interface UsePromptsReturn {
   prompts: Prompt[];
@@ -32,6 +74,7 @@ export function usePrompts(): UsePromptsReturn {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { deviceId } = useDeviceId();
   const { queueChange } = useSyncQueue();
+  const { hasMigrated, migrationDismissed } = useSyncEnabled();
 
   const [prompts, setPrompts] = useState<Prompt[]>(() => getLocalPrompts());
   const [isLoading, setIsLoading] = useState(false);
@@ -42,10 +85,19 @@ export function usePrompts(): UsePromptsReturn {
   const fetchRemotePrompts = useCallback(async () => {
     if (!isAuthenticated || !user) return;
 
+    // CRITICAL: Don't fetch if migration is pending (snapshot exists, not yet migrated/dismissed)
+    // This protects local data from being overwritten before migration completes
+    if (!hasMigrated && !migrationDismissed && hasPreAuthSnapshot()) {
+      console.log('[usePrompts] Migration pending - skipping cloud fetch to protect local data');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
+      console.log('[usePrompts] Fetching prompts from cloud for user:', user.id);
+      
       const { data, error: fetchError } = await supabase
         .from('prompts')
         .select(`
@@ -77,8 +129,16 @@ export function usePrompts(): UsePromptsReturn {
         updatedAt: p.updated_at,
       }));
 
+      console.log('[usePrompts] Loaded', remotePrompts.length, 'prompts from cloud');
+
       setPrompts(remotePrompts);
-      setLocalPrompts(remotePrompts); // Cache locally
+      
+      // Only cache to localStorage AFTER migration is complete
+      // This prevents overwriting local data during the migration window
+      if (hasMigrated || migrationDismissed) {
+        setLocalPrompts(remotePrompts);
+      }
+      
       hasLoadedFromCloud.current = true;
     } catch (e) {
       console.error('Error fetching prompts:', e);
@@ -88,10 +148,9 @@ export function usePrompts(): UsePromptsReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, hasMigrated, migrationDismissed]);
 
   // Load prompts based on auth state
-  // Key change: if authenticated, ALWAYS load from cloud (cloud is source of truth)
   useEffect(() => {
     if (authLoading) return; // Wait for auth to settle
     

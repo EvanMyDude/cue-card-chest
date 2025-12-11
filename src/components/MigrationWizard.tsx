@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Loader2, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import {
   Dialog,
@@ -14,13 +14,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useDeviceId } from '@/hooks/useDeviceId';
 import { mergePrompts, MergeConflict } from '@/utils/mergePrompts';
-import { toast } from 'sonner';
+import { getPreAuthSnapshot, clearPreAuthSnapshot } from '@/hooks/usePrompts';
 
 interface MigrationWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  localPrompts: Prompt[];
+  localPrompts: Prompt[]; // Fallback if no snapshot
   onMigrationComplete: (mergedPrompts: Prompt[], conflicts: MergeConflict[]) => void;
+  onDismiss?: () => void; // Called when user cancels - signals to allow cloud fetch
 }
 
 type MigrationStep = 'ready' | 'registering' | 'fetching' | 'merging' | 'uploading' | 'complete' | 'error';
@@ -30,6 +31,7 @@ export function MigrationWizard({
   onOpenChange,
   localPrompts,
   onMigrationComplete,
+  onDismiss,
 }: MigrationWizardProps) {
   const { user } = useAuth();
   const { deviceId, deviceName, deviceType } = useDeviceId();
@@ -38,6 +40,18 @@ export function MigrationWizard({
   const [progress, setProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   const [stats, setStats] = useState({ uploaded: 0, merged: 0, conflicts: 0 });
+
+  // Use the protected snapshot if available, otherwise fall back to localPrompts prop
+  // This ensures we use the data captured BEFORE the OAuth redirect
+  const promptsToMigrate = useMemo(() => {
+    const snapshot = getPreAuthSnapshot();
+    if (snapshot.length > 0) {
+      console.log('[MigrationWizard] Using protected snapshot:', snapshot.length, 'prompts');
+      return snapshot;
+    }
+    console.log('[MigrationWizard] Using localPrompts prop:', localPrompts.length, 'prompts');
+    return localPrompts;
+  }, [localPrompts]);
 
   useEffect(() => {
     if (open && step === 'ready') {
@@ -107,11 +121,14 @@ export function MigrationWizard({
         updatedAt: p.updated_at,
       }));
 
+      console.log('[MigrationWizard] Cloud has', remotePrompts.length, 'prompts');
+      console.log('[MigrationWizard] Local has', promptsToMigrate.length, 'prompts to migrate');
+
       // Step 3: Merge local and remote
       setStep('merging');
       setProgress(50);
 
-      const { merged, conflicts, stats: mergeStats } = mergePrompts(localPrompts, remotePrompts);
+      const { merged, conflicts, stats: mergeStats } = mergePrompts(promptsToMigrate, remotePrompts);
 
       setStats({
         uploaded: mergeStats.localOnly,
@@ -122,13 +139,15 @@ export function MigrationWizard({
       // Step 4: Upload local-only prompts
       setStep('uploading');
 
-      const localOnly = localPrompts.filter(
+      const localOnly = promptsToMigrate.filter(
         lp => !remotePrompts.some(rp => rp.id === lp.id)
       );
 
+      console.log('[MigrationWizard] Uploading', localOnly.length, 'local-only prompts');
+
       for (let i = 0; i < localOnly.length; i++) {
         const prompt = localOnly[i];
-        setProgress(50 + Math.round((i / localOnly.length) * 40));
+        setProgress(50 + Math.round((i / Math.max(localOnly.length, 1)) * 40));
 
         const { error: insertError } = await supabase.from('prompts').insert({
           id: prompt.id,
@@ -175,9 +194,12 @@ export function MigrationWizard({
         }
       }
 
-      // Complete
+      // Complete - clear the snapshot since migration succeeded
       setStep('complete');
       setProgress(100);
+      
+      console.log('[MigrationWizard] Migration complete, clearing snapshot');
+      clearPreAuthSnapshot();
 
       onMigrationComplete(merged, conflicts);
 
@@ -188,10 +210,25 @@ export function MigrationWizard({
     }
   };
 
+  // Handle dialog close (cancel or X button)
+  const handleClose = (isOpen: boolean) => {
+    if (!isOpen) {
+      // User is closing/cancelling the dialog
+      console.log('[MigrationWizard] Dialog dismissed, clearing snapshot');
+      clearPreAuthSnapshot();
+      
+      // Notify parent to set migrationDismissed so cloud fetch can proceed
+      if (onDismiss) {
+        onDismiss();
+      }
+    }
+    onOpenChange(isOpen);
+  };
+
   const getStepDescription = () => {
     switch (step) {
       case 'ready':
-        return `Ready to migrate ${localPrompts.length} local prompt${localPrompts.length !== 1 ? 's' : ''} to the cloud.`;
+        return `Ready to migrate ${promptsToMigrate.length} local prompt${promptsToMigrate.length !== 1 ? 's' : ''} to the cloud.`;
       case 'registering':
         return 'Registering this device...';
       case 'fetching':
@@ -208,7 +245,7 @@ export function MigrationWizard({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Migrate to Cloud</DialogTitle>
@@ -265,7 +302,7 @@ export function MigrationWizard({
           <div className="flex justify-end gap-2">
             {step === 'ready' && (
               <>
-                <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                <Button variant="ghost" onClick={() => handleClose(false)}>
                   Cancel
                 </Button>
                 <Button onClick={runMigration}>
@@ -275,13 +312,13 @@ export function MigrationWizard({
               </>
             )}
             {step === 'complete' && (
-              <Button onClick={() => onOpenChange(false)}>
+              <Button onClick={() => handleClose(false)}>
                 Done
               </Button>
             )}
             {step === 'error' && (
               <>
-                <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                <Button variant="ghost" onClick={() => handleClose(false)}>
                   Cancel
                 </Button>
                 <Button onClick={() => setStep('ready')}>
