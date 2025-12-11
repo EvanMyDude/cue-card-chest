@@ -96,7 +96,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
       content: content.trim(),
       tags,
       isPinned: editingPrompt?.isPinned || false,
-      order: editingPrompt?.order || Date.now(),
+      order: editingPrompt?.order ?? 0,
     });
 
     setTitle('');
