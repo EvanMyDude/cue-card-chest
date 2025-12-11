@@ -8,6 +8,7 @@ interface UsePromptsOptions {
   syncEnabled: boolean;
   userId: string | null;
   deviceId: string;
+  hasMigrated: boolean; // Prevents auto-fetch until migration is complete
 }
 
 interface SyncState {
@@ -17,7 +18,7 @@ interface SyncState {
   error: string | null;
 }
 
-export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions) {
+export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePromptsOptions) {
   const [prompts, setPromptsState] = useState<Prompt[]>(() => {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     return stored ? JSON.parse(stored) : [];
@@ -87,16 +88,19 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
     }
   }, [syncEnabled, userId]);
 
-  // Load remote prompts when sync becomes enabled
+  // Load remote prompts ONLY after migration is complete
+  // This prevents overwriting local data before the migration wizard runs
   useEffect(() => {
-    if (syncEnabled && userId) {
+    if (syncEnabled && userId && hasMigrated) {
+      console.log('[Sync] Migration complete, fetching remote prompts...');
       fetchRemotePrompts().then(remote => {
+        console.log(`[Sync] Fetched ${remote.length} prompts from cloud`);
         if (remote.length > 0) {
           setPromptsState(remote);
         }
       });
     }
-  }, [syncEnabled, userId, fetchRemotePrompts]);
+  }, [syncEnabled, userId, hasMigrated, fetchRemotePrompts]);
 
   // Helper to ensure order_index is a valid integer (max 2147483647)
   const safeOrderIndex = (order: number | undefined): number => {
@@ -251,12 +255,17 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
 
   // Upload local prompts to cloud (for migration)
   const uploadToCloud = useCallback(async (promptsToUpload: Prompt[]) => {
-    if (!syncEnabled || !userId) return { success: false, error: 'Not authenticated' };
+    if (!syncEnabled || !userId) {
+      console.error('[Sync] Upload failed: not authenticated');
+      return { success: false, error: 'Not authenticated' };
+    }
 
+    console.log(`[Sync] Uploading ${promptsToUpload.length} prompts to cloud...`);
     setSyncState(prev => ({ ...prev, status: 'syncing' }));
 
     try {
       for (const prompt of promptsToUpload) {
+        console.log(`[Sync] Uploading prompt: ${prompt.id} - ${prompt.title}`);
         const { error } = await supabase.from('prompts').upsert({
           id: prompt.id,
           user_id: userId,
@@ -268,9 +277,13 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
           checksum: '',
         });
 
-        if (error) throw error;
+        if (error) {
+          console.error('[Sync] Upload error:', error);
+          throw error;
+        }
       }
 
+      console.log('[Sync] Upload complete!');
       setSyncState({
         status: 'synced',
         lastSyncAt: new Date(),
@@ -281,6 +294,7 @@ export function usePrompts({ syncEnabled, userId, deviceId }: UsePromptsOptions)
       return { success: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Upload failed';
+      console.error('[Sync] Upload failed:', message);
       setSyncState(prev => ({ ...prev, status: 'error', error: message }));
       return { success: false, error: message };
     }
