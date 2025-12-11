@@ -14,16 +14,267 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      devices: {
+        Row: {
+          created_at: string | null
+          device_name: string
+          device_type: string | null
+          id: string
+          last_seen_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_name: string
+          device_type?: string | null
+          id?: string
+          last_seen_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_name?: string
+          device_type?: string | null
+          id?: string
+          last_seen_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      prompt_revisions: {
+        Row: {
+          checksum: string
+          conflict_resolved: boolean | null
+          content: string
+          created_at: string | null
+          device_id: string | null
+          id: string
+          prompt_id: string
+          title: string
+          version: number
+        }
+        Insert: {
+          checksum: string
+          conflict_resolved?: boolean | null
+          content: string
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          prompt_id: string
+          title: string
+          version: number
+        }
+        Update: {
+          checksum?: string
+          conflict_resolved?: boolean | null
+          content?: string
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          prompt_id?: string
+          title?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_revisions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_revisions_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_tags: {
+        Row: {
+          prompt_id: string
+          tag_id: string
+        }
+        Insert: {
+          prompt_id: string
+          tag_id: string
+        }
+        Update: {
+          prompt_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_tags_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompts: {
+        Row: {
+          archived_at: string | null
+          checksum: string
+          content: string
+          created_at: string | null
+          device_id: string | null
+          id: string
+          is_pinned: boolean | null
+          order_index: number | null
+          title: string
+          tokens: number | null
+          updated_at: string | null
+          user_id: string
+          version: number | null
+        }
+        Insert: {
+          archived_at?: string | null
+          checksum: string
+          content: string
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          order_index?: number | null
+          title: string
+          tokens?: number | null
+          updated_at?: string | null
+          user_id: string
+          version?: number | null
+        }
+        Update: {
+          archived_at?: string | null
+          checksum?: string
+          content?: string
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          order_index?: number | null
+          title?: string
+          tokens?: number | null
+          updated_at?: string | null
+          user_id?: string
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompts_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_state: {
+        Row: {
+          device_id: string
+          error_message: string | null
+          id: string
+          last_sync_at: string | null
+          sync_status: Database["public"]["Enums"]["sync_status"] | null
+          user_id: string
+        }
+        Insert: {
+          device_id: string
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          user_id: string
+        }
+        Update: {
+          device_id?: string
+          error_message?: string | null
+          id?: string
+          last_sync_at?: string | null
+          sync_status?: Database["public"]["Enums"]["sync_status"] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_state_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      compute_checksum: {
+        Args: { p_content: string; p_title: string }
+        Returns: string
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      sync_status: "pending" | "synced" | "conflict"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +401,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      sync_status: ["pending", "synced", "conflict"],
+    },
   },
 } as const

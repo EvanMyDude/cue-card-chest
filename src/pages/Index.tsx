@@ -3,8 +3,14 @@ import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
-import { ExportButton } from '@/components/ExportButton';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { SyncCTA } from '@/components/SyncCTA';
+import { SyncIndicator } from '@/components/SyncIndicator';
+import { SyncSettingsDropdown } from '@/components/SyncSettingsDropdown';
+import { MigrationWizard } from '@/components/MigrationWizard';
+import { useAuth } from '@/hooks/useAuth';
+import { useDeviceId } from '@/hooks/useDeviceId';
+import { useSyncEnabled } from '@/hooks/useSyncEnabled';
+import { usePrompts } from '@/hooks/usePrompts';
 import { useSound } from '@/hooks/useSound';
 import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,13 +33,72 @@ import {
 } from '@dnd-kit/sortable';
 
 const Index = () => {
-  const [prompts, setPrompts] = useLocalStorage<Prompt[]>('prompts', []);
+  const { user, isAuthenticated, isLoading: authLoading, signOut } = useAuth();
+  const { deviceId, deviceName, registerDevice } = useDeviceId();
+  const {
+    syncEnabled,
+    hasMigrated,
+    savePreAuthSnapshot,
+    getPreAuthSnapshot,
+    shouldShowMigrationWizard,
+    completeMigration,
+  } = useSyncEnabled(isAuthenticated);
+
+  const {
+    prompts,
+    setPrompts,
+    createPrompt,
+    updatePrompt,
+    deletePrompt,
+    togglePin,
+    reorderPrompts,
+    fetchRemotePrompts,
+    uploadToCloud,
+    syncState,
+    isLoading,
+  } = usePrompts({
+    syncEnabled,
+    userId: user?.id || null,
+    deviceId,
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const [previewPrompt, setPreviewPrompt] = useState<Prompt | null>(null);
-  const [sortMode, setSortMode] = useLocalStorage<'manual' | 'date'>('sort-mode', 'manual');
+  const [sortMode, setSortMode] = useState<'manual' | 'date'>(() => {
+    const stored = localStorage.getItem('sort-mode');
+    return (stored as 'manual' | 'date') || 'manual';
+  });
+  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
   const formRef = useRef<HTMLDivElement>(null);
+
+  // Save sort mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('sort-mode', sortMode);
+  }, [sortMode]);
+
+  // Register device when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      registerDevice(user.id);
+    }
+  }, [isAuthenticated, user?.id, registerDevice]);
+
+  // Check if migration wizard should be shown
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !hasMigrated) {
+      const snapshot = getPreAuthSnapshot();
+      const localPrompts = snapshot || prompts;
+      if (localPrompts.length > 0) {
+        setShowMigrationWizard(true);
+      } else {
+        // No local data, just mark as migrated
+        completeMigration();
+      }
+    }
+  }, [authLoading, isAuthenticated, hasMigrated, prompts, getPreAuthSnapshot, completeMigration]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -42,50 +107,36 @@ const Index = () => {
     })
   );
 
-  const handleSavePrompt = (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const handlePreAuth = () => {
+    // Save snapshot before auth redirect
+    savePreAuthSnapshot(prompts);
+  };
+
+  const handleSavePrompt = async (promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => {
     playSuccess();
     if (editingPrompt) {
-      setPrompts(
-        prompts.map((p) =>
-          p.id === editingPrompt.id
-            ? { ...p, ...promptData, updatedAt: new Date().toISOString() }
-            : p
-        )
-      );
+      await updatePrompt(editingPrompt.id, promptData);
       toast.success('Prompt updated successfully!');
       setEditingPrompt(null);
     } else {
-      const newPrompt: Prompt = {
-        ...promptData,
-        id: crypto.randomUUID(),
-        order: Date.now(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setPrompts([newPrompt, ...prompts]);
+      await createPrompt(promptData);
       toast.success('Prompt saved successfully!');
     }
   };
 
-  const handleDeletePrompt = (id: string) => {
+  const handleDeletePrompt = async (id: string) => {
     playClick();
-    setPrompts(prompts.filter((p) => p.id !== id));
+    await deletePrompt(id);
     toast.success('Prompt deleted');
   };
 
-
-  const handleTogglePin = (id: string) => {
+  const handleTogglePin = async (id: string) => {
     playClick();
-    setPrompts(
-      prompts.map((p) =>
-        p.id === id ? { ...p, isPinned: !p.isPinned } : p
-      )
-    );
+    await togglePin(id);
   };
 
   const handleEdit = (prompt: Prompt) => {
     setEditingPrompt(prompt);
-    // Scroll form into view smoothly
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 100);
@@ -100,13 +151,11 @@ const Index = () => {
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    // Only allow reordering in manual mode
     if (sortMode !== 'manual') {
       toast.info('Reordering is only available in Manual Order mode');
       return;
     }
 
-    // Avoid confusing partial updates while searching
     if (searchQuery) {
       toast.info('Clear the search to reorder prompts');
       return;
@@ -121,7 +170,6 @@ const Index = () => {
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    // Keep reordering within the same pin group to avoid confusing jumps
     const activePinned = filteredPrompts[oldIndex].isPinned;
     const overPinned = filteredPrompts[newIndex].isPinned;
     if (activePinned !== overPinned) {
@@ -135,7 +183,7 @@ const Index = () => {
       order: idx,
     }));
 
-    setPrompts(reordered);
+    reorderPrompts(reordered);
     toast.success('Order updated');
   };
 
@@ -143,6 +191,19 @@ const Index = () => {
     if (sortMode !== 'manual') {
       toast.info('Switch to Manual Order mode to reorder prompts');
     }
+  };
+
+  const handleMigrationComplete = (mergedPrompts: Prompt[]) => {
+    setPrompts(mergedPrompts);
+    completeMigration();
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  const handleImport = (importedPrompts: Prompt[]) => {
+    setPrompts(importedPrompts);
   };
 
   const allTags = useMemo(() => {
@@ -164,7 +225,6 @@ const Index = () => {
       );
     });
 
-    // Sort based on mode
     if (sortMode === 'manual') {
       filtered = filtered.sort((a, b) => {
         if (a.isPinned !== b.isPinned) {
@@ -184,6 +244,12 @@ const Index = () => {
     return filtered;
   }, [prompts, searchQuery, sortMode]);
 
+  // Get local prompts for migration (either from snapshot or current state)
+  const getLocalPromptsForMigration = (): Prompt[] => {
+    const snapshot = getPreAuthSnapshot();
+    return snapshot || prompts;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -197,7 +263,22 @@ const Index = () => {
               <h1 className="text-4xl font-bold text-foreground">Prompt Library</h1>
               <Sparkles className="h-5 w-5 text-accent" />
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* Sync Indicator (when authenticated) */}
+              {isAuthenticated && (
+                <SyncIndicator
+                  status={syncState.status}
+                  lastSyncAt={syncState.lastSyncAt}
+                  pendingChanges={syncState.pendingChanges}
+                  error={syncState.error}
+                />
+              )}
+
+              {/* Sync CTA (when not authenticated) */}
+              {!isAuthenticated && !authLoading && (
+                <SyncCTA onPreAuth={handlePreAuth} />
+              )}
+
               <Button
                 variant={sortMode === 'manual' ? 'default' : 'outline'}
                 size="sm"
@@ -232,11 +313,21 @@ const Index = () => {
               >
                 {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
-              <ExportButton prompts={prompts} onExport={playSuccess} />
+
+              {/* Settings Dropdown */}
+              <SyncSettingsDropdown
+                prompts={prompts}
+                onImport={handleImport}
+                onSignOut={handleSignOut}
+                deviceName={deviceName}
+                userEmail={user?.email}
+              />
             </div>
           </div>
           <p className="text-muted-foreground">
-            Save, organize, and reuse your AI prompts. All data persists locally.
+            {isAuthenticated
+              ? 'Your prompts sync automatically across all devices.'
+              : 'Save, organize, and reuse your AI prompts. All data persists locally.'}
           </p>
         </div>
 
@@ -320,6 +411,16 @@ const Index = () => {
         onOpenChange={(open) => !open && setPreviewPrompt(null)}
         onEdit={handleEdit}
         onTogglePin={handleTogglePin}
+      />
+
+      {/* Migration Wizard */}
+      <MigrationWizard
+        open={showMigrationWizard}
+        onOpenChange={setShowMigrationWizard}
+        localPrompts={getLocalPromptsForMigration()}
+        onFetchRemote={fetchRemotePrompts}
+        onComplete={handleMigrationComplete}
+        onUploadToCloud={uploadToCloud}
       />
     </div>
   );
