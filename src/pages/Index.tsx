@@ -39,9 +39,8 @@ const Index = () => {
     syncEnabled,
     hasMigrated,
     savePreAuthSnapshot,
-    getPreAuthSnapshot,
-    shouldShowMigrationWizard,
     completeMigration,
+    getLocalPromptsFromStorage,
   } = useSyncEnabled(isAuthenticated);
 
   const {
@@ -60,6 +59,7 @@ const Index = () => {
     syncEnabled,
     userId: user?.id || null,
     deviceId,
+    hasMigrated,
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,18 +87,20 @@ const Index = () => {
   }, [isAuthenticated, user?.id, registerDevice]);
 
   // Check if migration wizard should be shown
+  // Uses localStorage directly to avoid race conditions with React state
   useEffect(() => {
     if (!authLoading && isAuthenticated && !hasMigrated) {
-      const snapshot = getPreAuthSnapshot();
-      const localPrompts = snapshot || prompts;
-      if (localPrompts.length > 0) {
+      const localData = getLocalPromptsFromStorage();
+      console.log(`[Sync] Auth complete, checking for local data: ${localData.length} prompts`);
+      if (localData.length > 0) {
         setShowMigrationWizard(true);
       } else {
-        // No local data, just mark as migrated
+        // No local data, just mark as migrated and fetch from cloud
+        console.log('[Sync] No local data, marking as migrated');
         completeMigration();
       }
     }
-  }, [authLoading, isAuthenticated, hasMigrated, prompts, getPreAuthSnapshot, completeMigration]);
+  }, [authLoading, isAuthenticated, hasMigrated, getLocalPromptsFromStorage, completeMigration]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -244,10 +246,9 @@ const Index = () => {
     return filtered;
   }, [prompts, searchQuery, sortMode]);
 
-  // Get local prompts for migration (either from snapshot or current state)
+  // Get local prompts for migration - use localStorage directly
   const getLocalPromptsForMigration = (): Prompt[] => {
-    const snapshot = getPreAuthSnapshot();
-    return snapshot || prompts;
+    return getLocalPromptsFromStorage();
   };
 
   return (
@@ -255,15 +256,15 @@ const Index = () => {
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-primary/10">
                 <BookOpen className="h-6 w-6 text-primary" />
               </div>
-              <h1 className="text-4xl font-bold text-foreground">Prompt Library</h1>
-              <Sparkles className="h-5 w-5 text-accent" />
+              <h1 className="text-2xl sm:text-4xl font-bold text-foreground">Prompt Library</h1>
+              <Sparkles className="h-5 w-5 text-accent hidden sm:block" />
             </div>
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-wrap gap-2 items-center">
               {/* Sync Indicator (when authenticated) */}
               {isAuthenticated && (
                 <SyncIndicator
@@ -279,6 +280,7 @@ const Index = () => {
                 <SyncCTA onPreAuth={handlePreAuth} />
               )}
 
+              {/* Sort buttons - hidden on mobile */}
               <Button
                 variant={sortMode === 'manual' ? 'default' : 'outline'}
                 size="sm"
@@ -286,10 +288,10 @@ const Index = () => {
                   playClick();
                   setSortMode('manual');
                 }}
-                className="gap-2"
+                className="gap-2 hidden sm:flex"
               >
                 <GripVertical className="h-4 w-4" />
-                Manual Order
+                <span className="hidden md:inline">Manual Order</span>
               </Button>
               <Button
                 variant={sortMode === 'date' ? 'default' : 'outline'}
@@ -298,9 +300,13 @@ const Index = () => {
                   playClick();
                   setSortMode('date');
                 }}
+                className="hidden sm:flex"
               >
-                Sort by Date
+                <span className="hidden md:inline">Sort by Date</span>
+                <span className="md:hidden">Date</span>
               </Button>
+              
+              {/* Sound toggle - hidden on mobile */}
               <Button
                 variant="outline"
                 size="sm"
@@ -310,21 +316,24 @@ const Index = () => {
                   toast.success(soundEnabled ? 'Sounds disabled' : 'Sounds enabled');
                 }}
                 title={soundEnabled ? 'Disable sounds' : 'Enable sounds'}
+                className="hidden sm:flex"
               >
                 {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
               </Button>
 
-              {/* Settings Dropdown */}
-              <SyncSettingsDropdown
-                prompts={prompts}
-                onImport={handleImport}
-                onSignOut={handleSignOut}
-                deviceName={deviceName}
-                userEmail={user?.email}
-              />
+              {/* Settings Dropdown - always visible */}
+              {isAuthenticated && (
+                <SyncSettingsDropdown
+                  prompts={prompts}
+                  onImport={handleImport}
+                  onSignOut={handleSignOut}
+                  deviceName={deviceName}
+                  userEmail={user?.email}
+                />
+              )}
             </div>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm sm:text-base">
             {isAuthenticated
               ? 'Your prompts sync automatically across all devices.'
               : 'Save, organize, and reuse your AI prompts. All data persists locally.'}

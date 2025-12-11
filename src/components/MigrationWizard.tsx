@@ -114,9 +114,17 @@ export function MigrationWizard({
     toast.success('Migration complete! Your prompts are now synced.');
   };
 
-  const handleSkip = () => {
-    onOpenChange(false);
-    resetState();
+  const handleSkip = async () => {
+    // When skipping, still upload local prompts to avoid data loss
+    if (localPrompts.length > 0) {
+      console.log(`[Migration] Skip clicked - uploading ${localPrompts.length} local prompts`);
+      await handleUpload(localPrompts);
+    } else {
+      // No local prompts, just complete
+      onComplete([]);
+      onOpenChange(false);
+      resetState();
+    }
   };
 
   const getStepContent = () => {
