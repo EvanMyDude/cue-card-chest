@@ -8,6 +8,7 @@ interface UseAuthReturn {
   isLoading: boolean;
   isAuthenticated: boolean;
   signInWithMagicLink: (email: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -49,6 +50,19 @@ export function useAuth(): UseAuthReturn {
     return { error: error as Error | null };
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const redirectUrl = `${window.location.origin}/`;
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+
+    return { error: error as Error | null };
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -61,6 +75,7 @@ export function useAuth(): UseAuthReturn {
     isLoading,
     isAuthenticated: !!user,
     signInWithMagicLink,
+    signInWithGoogle,
     signOut,
   };
 }
