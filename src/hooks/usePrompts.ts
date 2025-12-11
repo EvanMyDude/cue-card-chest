@@ -300,6 +300,21 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
     }
   }, [syncEnabled, userId, deviceId]);
 
+  // Manual sync - force refresh from cloud
+  const manualSync = useCallback(async () => {
+    if (!syncEnabled || !userId) {
+      console.log('[Sync] Manual sync skipped - not authenticated');
+      return;
+    }
+    
+    console.log('[Sync] Manual sync triggered');
+    const remote = await fetchRemotePrompts();
+    if (remote.length > 0) {
+      setPromptsState(remote);
+      console.log(`[Sync] Manual sync complete - loaded ${remote.length} prompts`);
+    }
+  }, [syncEnabled, userId, fetchRemotePrompts]);
+
   return {
     prompts,
     setPrompts,
@@ -310,6 +325,7 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
     reorderPrompts,
     fetchRemotePrompts,
     uploadToCloud,
+    manualSync,
     syncState,
     isLoading,
   };

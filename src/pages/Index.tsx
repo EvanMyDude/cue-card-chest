@@ -53,6 +53,7 @@ const Index = () => {
     reorderPrompts,
     fetchRemotePrompts,
     uploadToCloud,
+    manualSync,
     syncState,
     isLoading,
   } = usePrompts({
@@ -327,6 +328,7 @@ const Index = () => {
                   prompts={prompts}
                   onImport={handleImport}
                   onSignOut={handleSignOut}
+                  onManualSync={manualSync}
                   deviceName={deviceName}
                   userEmail={user?.email}
                 />
