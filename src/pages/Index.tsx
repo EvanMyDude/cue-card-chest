@@ -422,6 +422,7 @@ const Index = () => {
         onOpenChange={(open) => !open && setPreviewPrompt(null)}
         onEdit={handleEdit}
         onTogglePin={handleTogglePin}
+        onDelete={handleDeletePrompt}
       />
 
       {/* Migration Wizard */}
