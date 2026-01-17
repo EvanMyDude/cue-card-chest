@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     console.log(`User ${userId} requesting pack import`);
 
     // Parse request body
-    const { packId, deviceId } = await req.json();
+    const { packId } = await req.json();
     if (!packId) {
       return new Response(
         JSON.stringify({ error: 'packId is required' }),
@@ -150,10 +150,9 @@ Deno.serve(async (req) => {
 
     const startOrderIndex = (maxOrderData?.[0]?.order_index ?? -1) + 1;
 
-    // Prepare prompts for insertion
+    // Prepare prompts for insertion (device_id omitted - pack imports are not device-specific)
     const promptsToInsert = newPrompts.map((p, idx) => ({
       user_id: userId,
-      device_id: deviceId || null,
       title: p.title,
       content: p.content,
       checksum: p.checksum,
