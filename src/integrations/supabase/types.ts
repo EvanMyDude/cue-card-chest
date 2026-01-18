@@ -41,6 +41,74 @@ export type Database = {
         }
         Relationships: []
       }
+      pack_prompts: {
+        Row: {
+          checksum: string
+          content: string
+          created_at: string
+          id: string
+          order_index: number
+          pack_id: string
+          title: string
+        }
+        Insert: {
+          checksum: string
+          content: string
+          created_at?: string
+          id?: string
+          order_index?: number
+          pack_id: string
+          title: string
+        }
+        Update: {
+          checksum?: string
+          content?: string
+          created_at?: string
+          id?: string
+          order_index?: number
+          pack_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pack_prompts_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_packs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       prompt_revisions: {
         Row: {
           checksum: string
@@ -132,6 +200,8 @@ export type Database = {
           id: string
           is_pinned: boolean | null
           order_index: number | null
+          source_pack_id: string | null
+          source_pack_version: number | null
           title: string
           tokens: number | null
           updated_at: string | null
@@ -147,6 +217,8 @@ export type Database = {
           id?: string
           is_pinned?: boolean | null
           order_index?: number | null
+          source_pack_id?: string | null
+          source_pack_version?: number | null
           title: string
           tokens?: number | null
           updated_at?: string | null
@@ -162,6 +234,8 @@ export type Database = {
           id?: string
           is_pinned?: boolean | null
           order_index?: number | null
+          source_pack_id?: string | null
+          source_pack_version?: number | null
           title?: string
           tokens?: number | null
           updated_at?: string | null
@@ -174,6 +248,13 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompts_source_pack_id_fkey"
+            columns: ["source_pack_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_packs"
             referencedColumns: ["id"]
           },
         ]

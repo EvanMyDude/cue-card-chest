@@ -8,9 +8,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Settings, Download, Upload, LogOut, Monitor, RefreshCw } from 'lucide-react';
+import { Settings, Download, Upload, LogOut, Monitor, RefreshCw, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { exportPromptsToJSON, importPromptsFromJSON, mergeImportedPrompts } from '@/utils/jsonExport';
+import { usePromptPacks } from '@/hooks/usePromptPacks';
 import type { Prompt } from '@/types/prompt';
 
 interface SyncSettingsDropdownProps {
@@ -20,6 +21,7 @@ interface SyncSettingsDropdownProps {
   onManualSync?: () => Promise<void>;
   deviceName: string;
   userEmail?: string;
+  deviceId?: string;
 }
 
 export function SyncSettingsDropdown({
@@ -29,9 +31,12 @@ export function SyncSettingsDropdown({
   onManualSync,
   deviceName,
   userEmail,
+  deviceId,
 }: SyncSettingsDropdownProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isImportingPack, setIsImportingPack] = useState(false);
+  const { importPack, getStarterPackId } = usePromptPacks();
 
   const handleManualSync = async () => {
     if (!onManualSync) return;
@@ -85,6 +90,26 @@ export function SyncSettingsDropdown({
     toast.success('Signed out successfully');
   };
 
+  const handleImportStarterPack = async () => {
+    setIsImportingPack(true);
+    try {
+      const result = await importPack(getStarterPackId(), deviceId);
+      if (result.imported > 0) {
+        toast.success(`Imported ${result.imported} prompts${result.skipped > 0 ? `, ${result.skipped} duplicates skipped` : ''}`);
+        // Trigger a sync to refresh the prompts list
+        if (onManualSync) {
+          await onManualSync();
+        }
+      } else if (result.skipped > 0) {
+        toast.info(`All ${result.skipped} prompts already in your library`);
+      }
+    } catch (error) {
+      toast.error('Failed to import starter pack');
+    } finally {
+      setIsImportingPack(false);
+    }
+  };
+
   return (
     <>
       <input
@@ -133,6 +158,16 @@ export function SyncSettingsDropdown({
             <Upload className="mr-2 h-4 w-4" />
             Import JSON
           </DropdownMenuItem>
+
+          {userEmail && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleImportStarterPack} disabled={isImportingPack}>
+                <Package className={`mr-2 h-4 w-4 ${isImportingPack ? 'animate-pulse' : ''}`} />
+                {isImportingPack ? 'Importing...' : 'Import Starter Pack'}
+              </DropdownMenuItem>
+            </>
+          )}
 
           {userEmail && (
             <>

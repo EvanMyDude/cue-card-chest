@@ -331,6 +331,7 @@ const Index = () => {
                   onManualSync={manualSync}
                   deviceName={deviceName}
                   userEmail={user?.email}
+                  deviceId={deviceId}
                 />
               )}
             </div>
