@@ -1,0 +1,7 @@
+project_id = "diawrfdqrmftuagwwlva"
+
+[functions.generate-title]
+verify_jwt = false
+
+[functions.import-pack]
+verify_jwt = false
