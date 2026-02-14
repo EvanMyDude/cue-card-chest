@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Prompt } from '@/types/prompt';
+import { syncPromptTags, fetchTagsForPrompts, syncAllPromptTags } from '@/utils/tagSync';
 
 const LOCAL_STORAGE_KEY = 'prompts';
 
@@ -54,11 +55,14 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
 
       if (error) throw error;
 
+      const promptIds = (data || []).map(p => p.id);
+      const tagsMap = await fetchTagsForPrompts(supabase, userId, promptIds);
+
       const remotePrompts: Prompt[] = (data || []).map(p => ({
         id: p.id,
         title: p.title,
         content: p.content,
-        tags: [],
+        tags: tagsMap.get(p.id) || [],
         isPinned: p.is_pinned || false,
         order: p.order_index || 0,
         createdAt: p.created_at || new Date().toISOString(),
@@ -130,6 +134,12 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
 
         if (error) throw error;
 
+        try {
+          await syncPromptTags(supabase, userId, newPrompt.id, newPrompt.tags);
+        } catch (tagErr) {
+          console.warn('[TagSync] Failed to sync tags for new prompt:', tagErr);
+        }
+
         setSyncState(prev => ({ ...prev, status: 'synced', lastSyncAt: new Date() }));
       } catch (error) {
         console.error('Failed to sync new prompt:', error);
@@ -168,6 +178,14 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
           .eq('user_id', userId);
 
         if (error) throw error;
+
+        if (updates.tags !== undefined) {
+          try {
+            await syncPromptTags(supabase, userId, id, updates.tags);
+          } catch (tagErr) {
+            console.warn('[TagSync] Failed to sync tags for prompt update:', tagErr);
+          }
+        }
 
         setSyncState(prev => ({ ...prev, status: 'synced', lastSyncAt: new Date() }));
       } catch (error) {
@@ -265,6 +283,12 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
           console.error('[Sync] Upload error:', error);
           throw error;
         }
+      }
+
+      try {
+        await syncAllPromptTags(supabase, userId, promptsToUpload);
+      } catch (tagErr) {
+        console.warn('[TagSync] Failed to sync tags during upload:', tagErr);
       }
 
       console.log('[Sync] Upload complete!');

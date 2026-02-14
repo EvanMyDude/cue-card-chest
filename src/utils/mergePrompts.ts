@@ -52,6 +52,7 @@ export function mergePrompts(
     if (localChecksum === remoteChecksum) {
       merged.push({
         ...remotePrompt,
+        tags: [...new Set([...localPrompt.tags, ...remotePrompt.tags])],
         isPinned: localPrompt.isPinned || remotePrompt.isPinned,
         order: Math.min(localPrompt.order, remotePrompt.order),
       });
