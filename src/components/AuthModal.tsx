@@ -87,6 +87,7 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
         toast.error(error.message);
         setIsLoading(false);
       }
+      // Don't set loading to false here - redirect will happen
     } catch {
       setIsLoading(false);
     }
