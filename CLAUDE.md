@@ -60,7 +60,8 @@ supabase/
 | `src/hooks/useAuth.ts` | Auth (email, magic link, Google OAuth — all native Supabase) |
 | `src/hooks/useSyncEnabled.ts` | Migration wizard state, sync control |
 | `src/components/PromptForm.tsx` | Create/edit form with client-side "Smart Title" generation |
-| `src/components/PromptCard.tsx` | Display card for a prompt |
+| `src/components/PromptCard.tsx` | Display card for a prompt (tags are clickable for filtering) |
+| `src/components/TagFilterBar.tsx` | Horizontal clickable tag filter bar (AND logic, ephemeral state) |
 | `src/types/prompt.ts` | `Prompt` interface definition |
 | `src/integrations/supabase/client.ts` | Supabase client initialization |
 | `src/integrations/supabase/types.ts` | Auto-generated database types |
@@ -86,6 +87,15 @@ supabase/
 - **`pack_prompts`** — Individual prompts within packs (public read)
 
 Key functions: `compute_checksum()` (SHA-256 dedup), `handle_updated_at()` (trigger), `has_role()` (RBAC)
+
+### Tag Filter Bar
+- `TagFilterBar` renders between the search bar and stats line in `Index.tsx`
+- Displays all tags from all prompts as clickable pills; active tags get highlighted styling
+- Multi-select with AND logic — each additional tag narrows results
+- Clicking a tag on a `PromptCard` or `PromptPreviewDialog` toggles it in the filter bar
+- State is ephemeral (`useState` in Index.tsx) — resets on page load, no localStorage
+- "Clear" button appears when any tags are active
+- Drag reordering is blocked when tag filters are active (same as search)
 
 ### Edge Functions
 - **`import-pack`** — Imports a prompt pack into user's library with checksum-based deduplication. Deployed to Supabase (`verify_jwt = false`, handles auth internally).

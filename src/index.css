@@ -2,93 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/*
+ * Design System — Bold & Modern (Vercel / Stripe inspired)
+ * Dark-first. Near-black canvas, electric blue accent, geometric type.
+ * All colors HSL.
+ */
 
 @layer base {
+  /* ── Dark theme (default) ───────────────────────────── */
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 240 5% 96%;
+    --background: 225 15% 4%;
+    --foreground: 0 0% 96%;
 
-    --card: 240 8% 8%;
-    --card-foreground: 240 5% 96%;
+    --card: 225 12% 7%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 240 8% 10%;
-    --popover-foreground: 240 5% 96%;
+    --popover: 225 12% 9%;
+    --popover-foreground: 0 0% 96%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 240 5% 96%;
+    --primary: 217 100% 58%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 240 5% 96%;
+    --secondary: 225 10% 12%;
+    --secondary-foreground: 0 0% 80%;
 
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 225 10% 14%;
+    --muted-foreground: 225 8% 50%;
 
-    --accent: 210 85% 65%;
-    --accent-foreground: 240 5% 96%;
-
-    --destructive: 0 62.8% 55%;
-    --destructive-foreground: 240 5% 96%;
-
-    --success: 142 71% 45%;
-    --success-foreground: 240 5% 96%;
-
-    --border: 240 6% 20%;
-    --input: 240 6% 20%;
-    --ring: 217 91% 60%;
-
-    --radius: 0.75rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .light {
-    --background: 240 10% 98%;
-    --foreground: 240 10% 10%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
-
-    --primary: 217 91% 55%;
-    --primary-foreground: 240 5% 96%;
-
-    --secondary: 240 5% 95%;
-    --secondary-foreground: 240 10% 10%;
-
-    --muted: 240 5% 95%;
-    --muted-foreground: 240 4% 45%;
-
-    --accent: 210 85% 60%;
-    --accent-foreground: 240 5% 96%;
+    --accent: 217 100% 58%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 240 5% 96%;
+    --destructive-foreground: 0 0% 100%;
 
     --success: 142 71% 45%;
-    --success-foreground: 240 5% 96%;
+    --success-foreground: 0 0% 100%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 217 91% 55%;
+    --border: 225 10% 13%;
+    --input: 225 10% 10%;
+    --ring: 217 100% 58%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 225 12% 7%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 217 100% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 10% 14%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 225 10% 13%;
+    --sidebar-ring: 217 100% 58%;
+  }
+
+  /* ── Light theme ────────────────────────────────────── */
+  .light {
+    --background: 220 20% 97%;
+    --foreground: 225 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 20% 10%;
+
+    --primary: 217 91% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 225 20% 10%;
+
+    --muted: 220 14% 94%;
+    --muted-foreground: 225 8% 42%;
+
+    --accent: 217 91% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
+    --ring: 217 91% 50%;
   }
 }
 
@@ -98,6 +95,139 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
   }
+
+  /* Smooth scrolling everywhere */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ── Background effects ───────────────────────────────── */
+@layer utilities {
+  /* Subtle dot-grid canvas (dark only) */
+  .bg-dot-grid {
+    background-image: radial-gradient(
+      circle,
+      hsl(225 10% 20%) 1px,
+      transparent 1px
+    );
+    background-size: 24px 24px;
+  }
+
+  /* Top gradient wash for depth */
+  .bg-gradient-wash {
+    background: linear-gradient(
+      180deg,
+      hsl(217 100% 58% / 0.04) 0%,
+      transparent 40%
+    );
+  }
+
+  /* Card hover glow */
+  .card-glow {
+    position: relative;
+  }
+  .card-glow::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      hsl(217 100% 58% / 0.0) 0%,
+      hsl(217 100% 58% / 0.0) 100%
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    transition: background 0.3s ease;
+  }
+  .card-glow:hover::before {
+    background: linear-gradient(
+      135deg,
+      hsl(217 100% 58% / 0.3) 0%,
+      hsl(217 100% 58% / 0.08) 50%,
+      hsl(280 100% 65% / 0.15) 100%
+    );
+  }
+
+  /* Subtle noise texture overlay */
+  .noise-overlay {
+    position: relative;
+  }
+  .noise-overlay::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 50;
+  }
+}
+
+/* ── Custom animations ────────────────────────────────── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(217 100% 58% / 0);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px hsl(217 100% 58% / 0.15);
+  }
+}
+
+/* ── Scrollbar styling (dark theme) ───────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(225 10% 20%);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(225 10% 28%);
+}
+
+/* ── Selection highlight ──────────────────────────────── */
+::selection {
+  background: hsl(217 100% 58% / 0.25);
+  color: inherit;
 }

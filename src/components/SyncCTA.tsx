@@ -16,10 +16,10 @@ export function SyncCTA({ onPreAuth }: SyncCTAProps) {
         variant="outline"
         size="sm"
         onClick={() => setShowAuthModal(true)}
-        className="gap-2"
+        className="gap-1.5 h-8 border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 text-xs"
       >
-        <Cloud className="h-4 w-4" />
-        Sync across devices
+        <Cloud className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Sync</span>
       </Button>
 
       <AuthModal

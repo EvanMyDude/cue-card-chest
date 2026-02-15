@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
@@ -93,7 +92,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     if (!finalTitle) {
       finalTitle = 'Untitled Prompt';
     }
-    
+
     onSave({
       title: finalTitle,
       content: content.trim(),
@@ -110,10 +109,10 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
 
   const suggestedTags = useMemo(() => {
     if (!tagInput.trim()) return [];
-    
+
     const input = tagInput.toLowerCase();
     const availableTags = existingTags.filter(tag => !tags.includes(tag));
-    
+
     return availableTags
       .filter(tag => tag.toLowerCase().includes(input))
       .sort((a, b) => {
@@ -145,7 +144,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
       }
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedSuggestionIndex(prev => 
+      setSelectedSuggestionIndex(prev =>
         prev < suggestedTags.length - 1 ? prev + 1 : prev
       );
     } else if (e.key === 'ArrowUp') {
@@ -176,60 +175,61 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
   }, [suggestedTags.length]);
 
   return (
-    <Card className="p-6 border-border bg-card">
+    <Card className="p-5 sm:p-6 border-border/60 bg-card">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Prompt title (optional - AI will generate if empty)"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="bg-secondary border-border flex-1"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={generateSmartTitle}
-              disabled={!content.trim() || isGeneratingTitle}
-              className="gap-2"
-            >
-              <Sparkles className="h-4 w-4" />
-              Smart Title
-            </Button>
-          </div>
+        {/* Title row */}
+        <div className="flex gap-2">
+          <Input
+            placeholder="Prompt title (optional — auto-generated if empty)"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="bg-input/50 border-border/60 flex-1 h-10 text-sm placeholder:text-muted-foreground/50 focus-visible:border-primary/50 focus-visible:ring-primary/20"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={generateSmartTitle}
+            disabled={!content.trim() || isGeneratingTitle}
+            className="gap-1.5 h-10 border-border/60 text-muted-foreground hover:text-foreground hover:border-primary/40 shrink-0"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Smart Title</span>
+          </Button>
         </div>
 
+        {/* Content */}
         <div>
           <Textarea
             placeholder="Write your prompt here..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
             required
-            rows={8}
-            className="resize-y bg-secondary border-border min-h-[200px]"
+            rows={6}
+            className="resize-y bg-input/50 border-border/60 min-h-[160px] text-sm leading-relaxed placeholder:text-muted-foreground/50 focus-visible:border-primary/50 focus-visible:ring-primary/20"
           />
-          <p className="text-sm text-muted-foreground mt-2">
+          <p className="text-[11px] text-muted-foreground mt-1.5 tabular-nums">
             {content.length} characters
           </p>
         </div>
 
+        {/* Tags */}
         <div className="relative">
           <Input
             placeholder="Add tags (press Enter)"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={handleAddTag}
-            className="bg-secondary border-border text-foreground"
+            className="bg-input/50 border-border/60 h-10 text-sm placeholder:text-muted-foreground/50 focus-visible:border-primary/50 focus-visible:ring-primary/20"
           />
           {tagInput.trim() && suggestedTags.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+            <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-lg shadow-xl shadow-black/20 max-h-60 overflow-auto">
               {suggestedTags.map((tag, index) => (
                 <div
                   key={tag}
                   className={`px-3 py-2 cursor-pointer text-sm transition-colors ${
-                    index === selectedSuggestionIndex 
-                      ? 'bg-accent text-accent-foreground' 
-                      : 'text-foreground hover:bg-accent/50'
+                    index === selectedSuggestionIndex
+                      ? 'bg-primary/10 text-foreground'
+                      : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                   }`}
                   onMouseDown={(e) => {
                     e.preventDefault();
@@ -242,28 +242,43 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
               ))}
             </div>
           )}
-          <div className="flex flex-wrap gap-2 mt-3">
-            {tags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-1">
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  className="ml-1 hover:text-destructive"
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-secondary text-xs font-medium text-secondary-foreground border border-border/50"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </Badge>
-            ))}
-          </div>
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-2">
-          <Button type="submit" className="flex-1" disabled={isGeneratingTitle}>
+        {/* Submit */}
+        <div className="flex gap-2 pt-1">
+          <Button
+            type="submit"
+            className="flex-1 h-10 font-medium bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={isGeneratingTitle}
+          >
             {isGeneratingTitle ? 'Generating Title...' : editingPrompt ? 'Update Prompt' : 'Save Prompt'}
           </Button>
           {editingPrompt && (
-            <Button type="button" variant="outline" onClick={handleCancel}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              className="h-10 border-border/60 text-muted-foreground hover:text-foreground"
+            >
               Cancel
             </Button>
           )}

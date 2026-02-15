@@ -9,6 +9,7 @@ interface SortablePromptCardProps {
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
   onPreview?: (prompt: Prompt) => void;
+  onTagClick?: (tag: string) => void;
   isDragEnabled?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const SortablePromptCard = ({
   onDelete,
   onTogglePin,
   onPreview,
+  onTagClick,
   isDragEnabled = true,
 }: SortablePromptCardProps) => {
   const {
@@ -62,6 +64,7 @@ export const SortablePromptCard = ({
         onDelete={onDelete}
         onTogglePin={onTogglePin}
         onPreview={onPreview}
+        onTagClick={onTagClick}
       />
     </div>
   );

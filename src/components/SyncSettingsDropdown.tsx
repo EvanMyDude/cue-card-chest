@@ -82,9 +82,9 @@ export function SyncSettingsDropdown({
     try {
       const imported = await importPromptsFromJSON(file);
       const { merged, newCount, duplicateCount } = mergeImportedPrompts(prompts, imported);
-      
+
       onImport(merged);
-      
+
       if (newCount > 0) {
         toast.success(`Imported ${newCount} new prompts${duplicateCount > 0 ? `, ${duplicateCount} duplicates skipped` : ''}`);
       } else if (duplicateCount > 0) {
@@ -135,52 +135,52 @@ export function SyncSettingsDropdown({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
             <Settings className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-56 bg-popover border-border/60">
           {userEmail && (
             <>
-              <DropdownMenuLabel className="font-normal">
+              <DropdownMenuLabel className="font-normal py-2.5">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium">{userEmail}</p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <p className="text-sm font-medium text-foreground">{userEmail}</p>
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
                     <Monitor className="h-3 w-3" />
                     {deviceName}
                   </p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              <DropdownMenuSeparator className="bg-border/40" />
             </>
           )}
 
           {userEmail && onManualSync && (
-            <DropdownMenuItem onClick={handleManualSync} disabled={isSyncing}>
+            <DropdownMenuItem onClick={handleManualSync} disabled={isSyncing} className="text-sm">
               <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
               {isSyncing ? 'Syncing...' : 'Sync Now'}
             </DropdownMenuItem>
           )}
 
-          <DropdownMenuItem onClick={handleExport}>
+          <DropdownMenuItem onClick={handleExport} className="text-sm">
             <Download className="mr-2 h-4 w-4" />
             Export JSON
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={handleImportClick}>
+          <DropdownMenuItem onClick={handleImportClick} className="text-sm">
             <Upload className="mr-2 h-4 w-4" />
             Import JSON
           </DropdownMenuItem>
 
-          <DropdownMenuItem onClick={handleExportPDF}>
+          <DropdownMenuItem onClick={handleExportPDF} className="text-sm">
             <FileText className="mr-2 h-4 w-4" />
             Export PDF
           </DropdownMenuItem>
 
           {userEmail && (
             <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleImportStarterPack} disabled={isImportingPack}>
+              <DropdownMenuSeparator className="bg-border/40" />
+              <DropdownMenuItem onClick={handleImportStarterPack} disabled={isImportingPack} className="text-sm">
                 <Package className={`mr-2 h-4 w-4 ${isImportingPack ? 'animate-pulse' : ''}`} />
                 {isImportingPack ? 'Importing...' : 'Import Starter Pack'}
               </DropdownMenuItem>
@@ -189,8 +189,8 @@ export function SyncSettingsDropdown({
 
           {userEmail && (
             <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+              <DropdownMenuSeparator className="bg-border/40" />
+              <DropdownMenuItem onClick={handleSignOut} className="text-sm text-destructive focus:text-destructive">
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </DropdownMenuItem>

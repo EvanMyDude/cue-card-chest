@@ -95,55 +95,55 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md bg-card border-border/60">
         <DialogHeader>
-          <DialogTitle>Sync across devices</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-lg font-semibold tracking-tight">Sync across devices</DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
             Sign in to sync your prompts across all your devices
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="email" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="email">Email</TabsTrigger>
-            <TabsTrigger value="magic">Magic Link</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-secondary/50 border border-border/40">
+            <TabsTrigger value="email" className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">Email</TabsTrigger>
+            <TabsTrigger value="magic" className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm">Magic Link</TabsTrigger>
           </TabsList>
 
           <TabsContent value="email" className="space-y-4 mt-4">
             <form onSubmit={handleEmailAuth} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
                   <Input
                     id="email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-10 bg-input/50 border-border/60 text-sm placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/20"
                     disabled={isLoading}
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-xs font-medium text-muted-foreground">Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
                   <Input
                     id="password"
                     type="password"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 h-10 bg-input/50 border-border/60 text-sm placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/20"
                     disabled={isLoading}
                   />
                 </div>
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full h-10 font-medium bg-primary hover:bg-primary/90" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {authMode === 'signin' ? 'Sign In' : 'Create Account'}
               </Button>
@@ -151,7 +151,7 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full"
+                className="w-full text-xs text-muted-foreground hover:text-foreground"
                 onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
                 disabled={isLoading}
               >
@@ -162,15 +162,17 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
 
           <TabsContent value="magic" className="space-y-4 mt-4">
             {magicLinkSent ? (
-              <div className="text-center py-4">
-                <Mail className="h-12 w-12 mx-auto text-primary mb-4" />
-                <h3 className="font-semibold mb-2">Check your email</h3>
-                <p className="text-sm text-muted-foreground">
-                  We sent a magic link to <strong>{email}</strong>
+              <div className="text-center py-6">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 mb-4">
+                  <Mail className="h-6 w-6 text-primary" />
+                </div>
+                <h3 className="font-semibold text-sm mb-1.5">Check your email</h3>
+                <p className="text-xs text-muted-foreground">
+                  We sent a magic link to <strong className="text-foreground">{email}</strong>
                 </p>
                 <Button
                   variant="ghost"
-                  className="mt-4"
+                  className="mt-4 text-xs text-muted-foreground"
                   onClick={() => setMagicLinkSent(false)}
                 >
                   Use a different email
@@ -179,22 +181,22 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
             ) : (
               <form onSubmit={handleMagicLink} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="magic-email">Email</Label>
+                  <Label htmlFor="magic-email" className="text-xs font-medium text-muted-foreground">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/50" />
                     <Input
                       id="magic-email"
                       type="email"
                       placeholder="you@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 h-10 bg-input/50 border-border/60 text-sm placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-primary/20"
                       disabled={isLoading}
                     />
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full h-10 font-medium bg-primary hover:bg-primary/90" disabled={isLoading}>
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Send Magic Link
                 </Button>
@@ -203,18 +205,18 @@ export function AuthModal({ open, onOpenChange, onPreAuth }: AuthModalProps) {
           </TabsContent>
         </Tabs>
 
-        <div className="relative my-4">
+        <div className="relative my-3">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+            <span className="w-full border-t border-border/40" />
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
+            <span className="bg-card px-3 text-muted-foreground">Or continue with</span>
           </div>
         </div>
 
         <Button
           variant="outline"
-          className="w-full"
+          className="w-full h-10 border-border/60 text-sm font-medium text-muted-foreground hover:text-foreground hover:border-border"
           onClick={handleGoogleAuth}
           disabled={isLoading}
         >

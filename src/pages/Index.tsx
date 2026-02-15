@@ -3,6 +3,7 @@ import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
+import { TagFilterBar } from '@/components/TagFilterBar';
 import { SyncCTA } from '@/components/SyncCTA';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { SyncSettingsDropdown } from '@/components/SyncSettingsDropdown';
@@ -12,7 +13,7 @@ import { useDeviceId } from '@/hooks/useDeviceId';
 import { useSyncEnabled } from '@/hooks/useSyncEnabled';
 import { usePrompts } from '@/hooks/usePrompts';
 import { useSound } from '@/hooks/useSound';
-import { BookOpen, Sparkles, GripVertical, Volume2, VolumeX } from 'lucide-react';
+import { GripVertical, Clock, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
@@ -70,6 +71,7 @@ const Index = () => {
     return (stored as 'manual' | 'date') || 'manual';
   });
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
   const formRef = useRef<HTMLDivElement>(null);
@@ -145,8 +147,8 @@ const Index = () => {
       return;
     }
 
-    if (searchQuery) {
-      toast.info('Clear the search to reorder prompts');
+    if (searchQuery || selectedTags.length > 0) {
+      toast.info('Clear the search and tag filters to reorder prompts');
       return;
     }
 
@@ -187,6 +189,18 @@ const Index = () => {
     completeMigration();
   };
 
+  const handleToggleTag = (tag: string) => {
+    playClick();
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
+
+  const handleClearTags = () => {
+    playClick();
+    setSelectedTags([]);
+  };
+
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     prompts.forEach(prompt => {
@@ -198,12 +212,14 @@ const Index = () => {
   const filteredPrompts = useMemo(() => {
     const query = searchQuery.toLowerCase();
     const filtered = prompts.filter((prompt) => {
-      if (!query) return true;
-      return (
+      const matchesSearch = !query || (
         prompt.title.toLowerCase().includes(query) ||
         prompt.content.toLowerCase().includes(query) ||
         prompt.tags.some((tag) => tag.toLowerCase().includes(query))
       );
+      const matchesTags = selectedTags.length === 0 ||
+        selectedTags.every((tag) => prompt.tags.includes(tag));
+      return matchesSearch && matchesTags;
     });
 
     return filtered.sort((a, b) => {
@@ -215,92 +231,95 @@ const Index = () => {
       }
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [prompts, searchQuery, sortMode]);
+  }, [prompts, searchQuery, selectedTags, sortMode]);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <BookOpen className="h-6 w-6 text-primary" />
-              </div>
-              <h1 className="text-2xl sm:text-4xl font-bold text-foreground">Prompt Library</h1>
-              <Sparkles className="h-5 w-5 text-accent hidden sm:block" />
+    <div className="min-h-screen bg-background bg-dot-grid bg-gradient-wash noise-overlay">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+        {/* ── Header toolbar ─────────────────────────── */}
+        <header className="flex items-center justify-between gap-4 mb-6 animate-fade-in">
+          {/* Left: Logo + title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+              <span className="text-primary font-semibold text-sm">/</span>
             </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              {isAuthenticated && (
-                <SyncIndicator
-                  status={syncState.status}
-                  lastSyncAt={syncState.lastSyncAt}
-                  pendingChanges={syncState.pendingChanges}
-                  error={syncState.error}
-                />
-              )}
-
-              {!isAuthenticated && !authLoading && (
-                <SyncCTA onPreAuth={() => savePreAuthSnapshot(prompts)} />
-              )}
-
-              <Button
-                variant={sortMode === 'manual' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  playClick();
-                  setSortMode('manual');
-                }}
-                className="gap-2 hidden sm:flex"
-              >
-                <GripVertical className="h-4 w-4" />
-                <span className="hidden md:inline">Manual Order</span>
-              </Button>
-              <Button
-                variant={sortMode === 'date' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  playClick();
-                  setSortMode('date');
-                }}
-                className="hidden sm:flex"
-              >
-                <span className="hidden md:inline">Sort by Date</span>
-                <span className="md:hidden">Date</span>
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  playClick();
-                  setSoundEnabled(!soundEnabled);
-                  toast.success(soundEnabled ? 'Sounds disabled' : 'Sounds enabled');
-                }}
-                title={soundEnabled ? 'Disable sounds' : 'Enable sounds'}
-                className="hidden sm:flex"
-              >
-                {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-              </Button>
-
-              <SyncSettingsDropdown
-                prompts={prompts}
-                onImport={setPrompts}
-                onSignOut={signOut}
-                onManualSync={isAuthenticated ? manualSync : undefined}
-                deviceName={deviceName}
-                userEmail={isAuthenticated ? user?.email : undefined}
-                deviceId={deviceId}
-              />
-            </div>
+            <h1 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight truncate">
+              Prompt Library
+            </h1>
           </div>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            {isAuthenticated
-              ? 'Your prompts sync automatically across all devices.'
-              : 'Save, organize, and reuse your AI prompts. All data persists locally.'}
-          </p>
-        </div>
 
-        <div ref={formRef} className="mb-8">
+          {/* Right: Actions */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {isAuthenticated && (
+              <SyncIndicator
+                status={syncState.status}
+                lastSyncAt={syncState.lastSyncAt}
+                pendingChanges={syncState.pendingChanges}
+                error={syncState.error}
+              />
+            )}
+
+            {!isAuthenticated && !authLoading && (
+              <SyncCTA onPreAuth={() => savePreAuthSnapshot(prompts)} />
+            )}
+
+            {/* Sort toggle */}
+            <div className="hidden sm:flex items-center rounded-lg border border-border bg-secondary/50 p-0.5">
+              <button
+                onClick={() => { playClick(); setSortMode('manual'); }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  sortMode === 'manual'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+                Manual
+              </button>
+              <button
+                onClick={() => { playClick(); setSortMode('date'); }}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  sortMode === 'date'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Date
+              </button>
+            </div>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                playClick();
+                setSoundEnabled(!soundEnabled);
+                toast.success(soundEnabled ? 'Sounds disabled' : 'Sounds enabled');
+              }}
+              title={soundEnabled ? 'Disable sounds' : 'Enable sounds'}
+              className="hidden sm:flex h-8 w-8 text-muted-foreground hover:text-foreground"
+            >
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
+
+            <SyncSettingsDropdown
+              prompts={prompts}
+              onImport={setPrompts}
+              onSignOut={signOut}
+              onManualSync={isAuthenticated ? manualSync : undefined}
+              deviceName={deviceName}
+              userEmail={isAuthenticated ? user?.email : undefined}
+              deviceId={deviceId}
+            />
+          </div>
+        </header>
+
+        {/* ── Separator ──────────────────────────────── */}
+        <div className="h-px bg-border mb-8" />
+
+        {/* ── Prompt form ────────────────────────────── */}
+        <div ref={formRef} className="mb-8 animate-fade-in-up" style={{ animationDelay: '50ms' }}>
           <PromptForm
             onSave={handleSavePrompt}
             editingPrompt={editingPrompt}
@@ -311,22 +330,36 @@ const Index = () => {
           />
         </div>
 
-        <div className="mb-6">
+        {/* ── Search + stats ─────────────────────────── */}
+        <div className="mb-6 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
           <SearchBar value={searchQuery} onChange={setSearchQuery} />
+          <TagFilterBar
+            allTags={allTags}
+            selectedTags={selectedTags}
+            onToggleTag={handleToggleTag}
+            onClearTags={handleClearTags}
+          />
         </div>
 
-        <div className="mb-6 flex gap-4 text-sm text-muted-foreground">
-          <span>Total: {prompts.length}</span>
-          <span>•</span>
-          <span>Pinned: {prompts.filter((p) => p.isPinned).length}</span>
-          {searchQuery && (
+        <div className="mb-6 flex items-center gap-3 text-xs font-medium text-muted-foreground animate-fade-in" style={{ animationDelay: '150ms' }}>
+          <span className="tabular-nums">{prompts.length} prompts</span>
+          <span className="w-1 h-1 rounded-full bg-border" />
+          <span className="tabular-nums">{prompts.filter((p) => p.isPinned).length} pinned</span>
+          {(searchQuery || selectedTags.length > 0) && (
             <>
-              <span>•</span>
-              <span>Results: {filteredPrompts.length}</span>
+              <span className="w-1 h-1 rounded-full bg-border" />
+              <span className="tabular-nums">{filteredPrompts.length} results</span>
+            </>
+          )}
+          {selectedTags.length > 0 && (
+            <>
+              <span className="w-1 h-1 rounded-full bg-border" />
+              <span className="tabular-nums">{selectedTags.length} tag{selectedTags.length !== 1 ? 's' : ''} active</span>
             </>
           )}
         </div>
 
+        {/* ── Card grid ──────────────────────────────── */}
         {filteredPrompts.length > 0 ? (
           <DndContext
             sensors={sortMode === 'manual' ? sensors : []}
@@ -339,29 +372,35 @@ const Index = () => {
               strategy={verticalListSortingStrategy}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredPrompts.map((prompt) => (
-                  <SortablePromptCard
+                {filteredPrompts.map((prompt, i) => (
+                  <div
                     key={prompt.id}
-                    prompt={prompt}
-                    onEdit={handleEdit}
-                    onDelete={handleDeletePrompt}
-                    onTogglePin={handleTogglePin}
-                    onPreview={setPreviewPrompt}
-                    isDragEnabled={sortMode === 'manual'}
-                  />
+                    className="animate-fade-in-up"
+                    style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
+                  >
+                    <SortablePromptCard
+                      prompt={prompt}
+                      onEdit={handleEdit}
+                      onDelete={handleDeletePrompt}
+                      onTogglePin={handleTogglePin}
+                      onPreview={setPreviewPrompt}
+                      onTagClick={handleToggleTag}
+                      isDragEnabled={sortMode === 'manual'}
+                    />
+                  </div>
                 ))}
               </div>
             </SortableContext>
           </DndContext>
         ) : (
-          <div className="text-center py-16">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
-              <BookOpen className="h-8 w-8 text-muted-foreground" />
+          <div className="text-center py-20 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-secondary border border-border mb-5">
+              <span className="text-2xl text-muted-foreground font-light">/</span>
             </div>
-            <h3 className="text-xl font-semibold mb-2 text-foreground">
+            <h3 className="text-lg font-semibold mb-2 text-foreground">
               {searchQuery ? 'No prompts found' : 'No prompts yet'}
             </h3>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
               {searchQuery
                 ? 'Try a different search term'
                 : 'Create your first prompt above to get started'}
@@ -377,6 +416,7 @@ const Index = () => {
         onEdit={handleEdit}
         onTogglePin={handleTogglePin}
         onDelete={handleDeletePrompt}
+        onTagClick={handleToggleTag}
       />
 
       <MigrationWizard
