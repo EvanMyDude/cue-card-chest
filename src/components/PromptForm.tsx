@@ -5,9 +5,42 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { X, Sparkles } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Prompt } from '@/types/prompt';
+
+/**
+ * Generate a concise title from prompt content (client-side).
+ * Extracts the first meaningful sentence/phrase, cleans it up,
+ * and caps it at ~50 chars on a word boundary.
+ */
+function generateTitleFromContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) return 'Untitled Prompt';
+
+  // Take first line or first sentence
+  const firstLine = trimmed.split('\n')[0].trim();
+  // Try to find first sentence (period, question mark, exclamation)
+  const sentenceMatch = firstLine.match(/^(.+?[.!?])\s/);
+  let candidate = sentenceMatch ? sentenceMatch[1] : firstLine;
+
+  // Remove markdown formatting
+  candidate = candidate
+    .replace(/^#+\s*/, '')      // Remove heading markers
+    .replace(/\*\*/g, '')       // Remove bold
+    .replace(/\*/g, '')         // Remove italic
+    .replace(/`/g, '')          // Remove code ticks
+    .replace(/^\s*[-*]\s+/, '') // Remove list markers
+    .trim();
+
+  // Truncate to ~50 chars on a word boundary
+  if (candidate.length > 50) {
+    candidate = candidate.slice(0, 50).replace(/\s+\S*$/, '').trim();
+    // Remove trailing punctuation that looks odd
+    candidate = candidate.replace(/[,;:\-]$/, '').trim();
+  }
+
+  return candidate || 'Untitled Prompt';
+}
 
 interface PromptFormProps {
   onSave: (prompt: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -23,7 +56,9 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
   const [content, setContent] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
+  // Title generation is now client-side (instant), but we keep this state
+  // to avoid changing the component's interface in case anything references it
+  const isGeneratingTitle = false;
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
 
   useEffect(() => {
@@ -34,58 +69,27 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
     }
   }, [editingPrompt]);
 
-  const generateSmartTitle = async () => {
+  const generateSmartTitle = () => {
     if (!content.trim()) {
       toast.error('Please enter some content first');
       return;
     }
 
     onGenerateTitle?.();
-    setIsGeneratingTitle(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('generate-title', {
-        body: { content: content.trim() }
-      });
-
-      if (error) throw error;
-
-      if (data?.title) {
-        setTitle(data.title);
-        toast.success('Title generated!');
-      }
-    } catch (error) {
-      console.error('Error generating title:', error);
-      toast.error('Failed to generate title');
-    } finally {
-      setIsGeneratingTitle(false);
-    }
+    const generated = generateTitleFromContent(content);
+    setTitle(generated);
+    toast.success('Title generated!');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    let finalTitle = title.trim();
-    
-    if (!finalTitle && content.trim()) {
-      setIsGeneratingTitle(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('generate-title', {
-          body: { content: content.trim() }
-        });
 
-        if (!error && data?.title) {
-          finalTitle = data.title;
-        } else {
-          finalTitle = content.split('\n')[0].slice(0, 50) || 'Untitled Prompt';
-        }
-      } catch (error) {
-        console.error('Error generating title:', error);
-        finalTitle = content.split('\n')[0].slice(0, 50) || 'Untitled Prompt';
-      } finally {
-        setIsGeneratingTitle(false);
-      }
+    let finalTitle = title.trim();
+
+    if (!finalTitle && content.trim()) {
+      finalTitle = generateTitleFromContent(content);
     }
-    
+
     if (!finalTitle) {
       finalTitle = 'Untitled Prompt';
     }
@@ -190,7 +194,7 @@ export function PromptForm({ onSave, editingPrompt, onCancelEdit, onGenerateTitl
               className="gap-2"
             >
               <Sparkles className="h-4 w-4" />
-              {isGeneratingTitle ? 'Generating...' : 'AI Title'}
+              Smart Title
             </Button>
           </div>
         </div>

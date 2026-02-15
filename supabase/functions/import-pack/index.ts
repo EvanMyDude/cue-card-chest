@@ -131,10 +131,10 @@ Deno.serve(async (req) => {
 
     if (newPrompts.length === 0) {
       return new Response(
-        JSON.stringify({ 
-          imported: 0, 
-          skipped: skippedCount, 
-          message: 'All prompts already exist in your library' 
+        JSON.stringify({
+          imported: 0,
+          skipped: skippedCount,
+          message: 'All prompts already exist in your library'
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
     const startOrderIndex = (maxOrderData?.[0]?.order_index ?? -1) + 1;
 
-    // Prepare prompts for insertion (device_id omitted - pack imports are not device-specific)
+    // Prepare prompts for insertion
     const promptsToInsert = newPrompts.map((p, idx) => ({
       user_id: userId,
       title: p.title,
@@ -179,11 +179,11 @@ Deno.serve(async (req) => {
     console.log(`Successfully imported ${newPrompts.length} prompts`);
 
     return new Response(
-      JSON.stringify({ 
-        imported: newPrompts.length, 
+      JSON.stringify({
+        imported: newPrompts.length,
         skipped: skippedCount,
         packName: pack.name,
-        message: `Imported ${newPrompts.length} prompts from "${pack.name}"` 
+        message: `Imported ${newPrompts.length} prompts from "${pack.name}"`
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
