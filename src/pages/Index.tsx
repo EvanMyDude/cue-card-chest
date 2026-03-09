@@ -16,6 +16,7 @@ import { useSound } from '@/hooks/useSound';
 import { GripVertical, Clock, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 import type { Prompt } from '@/types/prompt';
 import {
   DndContext,
@@ -308,6 +309,7 @@ const Index = () => {
               onImport={setPrompts}
               onSignOut={signOut}
               onManualSync={isAuthenticated ? manualSync : undefined}
+              onUploadToCloud={isAuthenticated ? uploadToCloud : undefined}
               deviceName={deviceName}
               userEmail={isAuthenticated ? user?.email : undefined}
               deviceId={deviceId}
@@ -407,6 +409,13 @@ const Index = () => {
             </p>
           </div>
         )}
+
+        {/* ── Footer ──────────────────────────────────── */}
+        <footer className="mt-12 mb-4 text-center text-xs text-muted-foreground">
+          <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+          <span className="mx-2">·</span>
+          <Link to="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
+        </footer>
       </div>
 
       <PromptPreviewDialog

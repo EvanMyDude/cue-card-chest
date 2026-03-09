@@ -15,11 +15,14 @@ import { exportPromptsToPDF } from '@/utils/pdfExport';
 import { usePromptPacks } from '@/hooks/usePromptPacks';
 import type { Prompt } from '@/types/prompt';
 
+const SHOW_STARTER_PACK = false;
+
 interface SyncSettingsDropdownProps {
   prompts: Prompt[];
   onImport: (prompts: Prompt[]) => void;
   onSignOut: () => void;
   onManualSync?: () => Promise<void>;
+  onUploadToCloud?: (prompts: Prompt[]) => Promise<{ success: boolean; error?: string }>;
   deviceName: string;
   userEmail?: string;
   deviceId?: string;
@@ -30,6 +33,7 @@ export function SyncSettingsDropdown({
   onImport,
   onSignOut,
   onManualSync,
+  onUploadToCloud,
   deviceName,
   userEmail,
   deviceId,
@@ -84,6 +88,13 @@ export function SyncSettingsDropdown({
       const { merged, newCount, duplicateCount } = mergeImportedPrompts(prompts, imported);
 
       onImport(merged);
+
+      // Sync imported prompts to cloud if authenticated
+      if (onUploadToCloud && newCount > 0) {
+        onUploadToCloud(merged).catch((err) => {
+          console.warn('[Import] Cloud sync after import failed:', err);
+        });
+      }
 
       if (newCount > 0) {
         toast.success(`Imported ${newCount} new prompts${duplicateCount > 0 ? `, ${duplicateCount} duplicates skipped` : ''}`);
@@ -177,7 +188,7 @@ export function SyncSettingsDropdown({
             Export PDF
           </DropdownMenuItem>
 
-          {userEmail && (
+          {SHOW_STARTER_PACK && userEmail && (
             <>
               <DropdownMenuSeparator className="bg-border/40" />
               <DropdownMenuItem onClick={handleImportStarterPack} disabled={isImportingPack} className="text-sm">

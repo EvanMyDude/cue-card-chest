@@ -313,14 +313,19 @@ export function usePrompts({ syncEnabled, userId, deviceId, hasMigrated }: UsePr
       console.log('[Sync] Manual sync skipped - not authenticated');
       return;
     }
-    
+
     console.log('[Sync] Manual sync triggered');
+    // Upload local state first so remote has everything
+    if (prompts.length > 0) {
+      await uploadToCloud(prompts);
+    }
+    // Then fetch merged result from remote
     const remote = await fetchRemotePrompts();
     if (remote.length > 0) {
       setPromptsState(remote);
       console.log(`[Sync] Manual sync complete - loaded ${remote.length} prompts`);
     }
-  }, [syncEnabled, userId, fetchRemotePrompts]);
+  }, [syncEnabled, userId, prompts, fetchRemotePrompts, uploadToCloud]);
 
   return {
     prompts,

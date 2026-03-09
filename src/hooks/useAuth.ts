@@ -18,6 +18,7 @@ export function useAuth() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log('[Auth] onAuthStateChange:', event, session?.user?.email ?? 'no user');
         setState({
           session,
           user: session?.user ?? null,
@@ -27,11 +28,15 @@ export function useAuth() {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[Auth] getSession:', session?.user?.email ?? 'no session');
       setState({
         session,
         user: session?.user ?? null,
         isLoading: false,
       });
+    }).catch((err) => {
+      console.error('[Auth] getSession failed:', err);
+      setState({ session: null, user: null, isLoading: false });
     });
 
     return () => subscription.unsubscribe();
