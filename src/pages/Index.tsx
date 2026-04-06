@@ -3,7 +3,7 @@ import { PromptForm } from '@/components/PromptForm';
 import { SortablePromptCard } from '@/components/SortablePromptCard';
 import { PromptPreviewDialog } from '@/components/PromptPreviewDialog';
 import { SearchBar } from '@/components/SearchBar';
-import { TagFilterBar } from '@/components/TagFilterBar';
+import { TagFilterBar, type TagFilterMode } from '@/components/TagFilterBar';
 import { SyncCTA } from '@/components/SyncCTA';
 import { SyncIndicator } from '@/components/SyncIndicator';
 import { SyncSettingsDropdown } from '@/components/SyncSettingsDropdown';
@@ -73,6 +73,7 @@ const Index = () => {
   });
   const [showMigrationWizard, setShowMigrationWizard] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<TagFilterMode>('or');
 
   const { soundEnabled, setSoundEnabled, playClick, playSuccess } = useSound();
   const formRef = useRef<HTMLDivElement>(null);
@@ -202,6 +203,12 @@ const Index = () => {
     setSelectedTags([]);
   };
 
+  const handleFilterModeChange = (mode: TagFilterMode) => {
+    if (mode === tagFilterMode) return;
+    playClick();
+    setTagFilterMode(mode);
+  };
+
   const allTags = useMemo(() => {
     const tagSet = new Set<string>();
     prompts.forEach(prompt => {
@@ -219,7 +226,9 @@ const Index = () => {
         prompt.tags.some((tag) => tag.toLowerCase().includes(query))
       );
       const matchesTags = selectedTags.length === 0 ||
-        selectedTags.every((tag) => prompt.tags.includes(tag));
+        (tagFilterMode === 'or'
+          ? selectedTags.some((tag) => prompt.tags.includes(tag))
+          : selectedTags.every((tag) => prompt.tags.includes(tag)));
       return matchesSearch && matchesTags;
     });
 
@@ -232,7 +241,7 @@ const Index = () => {
       }
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
     });
-  }, [prompts, searchQuery, selectedTags, sortMode]);
+  }, [prompts, searchQuery, selectedTags, sortMode, tagFilterMode]);
 
   return (
     <div className="min-h-screen bg-background bg-dot-grid bg-gradient-wash noise-overlay">
@@ -338,7 +347,9 @@ const Index = () => {
           <TagFilterBar
             allTags={allTags}
             selectedTags={selectedTags}
+            filterMode={tagFilterMode}
             onToggleTag={handleToggleTag}
+            onFilterModeChange={handleFilterModeChange}
             onClearTags={handleClearTags}
           />
         </div>

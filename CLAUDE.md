@@ -91,9 +91,11 @@ Key functions: `compute_checksum()` (SHA-256 dedup), `handle_updated_at()` (trig
 ### Tag Filter Bar
 - `TagFilterBar` renders between the search bar and stats line in `Index.tsx`
 - Displays all tags from all prompts as clickable pills; active tags get highlighted styling
-- Multi-select with AND logic — each additional tag narrows results
+- Includes a visible `Match` toggle with `Any` (default) and `All` modes near the tag pills
+- Multi-select defaults to OR logic (`Any`) — each additional tag expands results
+- Optional AND logic (`All`) shows only prompts matching every selected tag
 - Clicking a tag on a `PromptCard` or `PromptPreviewDialog` toggles it in the filter bar
-- State is ephemeral (`useState` in Index.tsx) — resets on page load, no localStorage
+- State is ephemeral (`useState` in Index.tsx) — selected tags and mode reset to default on page load, no localStorage
 - "Clear" button appears when any tags are active
 - Drag reordering is blocked when tag filters are active (same as search)
 
